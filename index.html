@@ -106,11 +106,16 @@
             
             // Instansiasi client Supabase aman tanpa error URL
             if (typeof supabase !== 'undefined' && supabase.createClient) {
-                currentClient = supabase.createClient(config.url, config.key);
-            } else {
-                alert('Library Supabase belum siap, periksa koneksi internet!');
-                return;
-            }
+    currentClient = supabase.createClient(config.url, config.key, {
+        auth: {
+            persistSession: false, // Mematikan peringatan Multiple GoTrueClient
+            autoRefreshToken: false
+        }
+    });
+} else {
+    alert('Library Supabase belum siap, periksa koneksi internet!');
+    return;
+}
 
             const { data, error } = await currentClient
                 .from('students')
