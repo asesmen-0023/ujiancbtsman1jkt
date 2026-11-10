@@ -18,7 +18,7 @@
             </div>
             <h3 id="alertTitle" class="text-base font-bold text-slate-800 mb-1">Akses Ditolak</h3>
             <p id="alertMessage" class="text-xs text-slate-600 leading-relaxed mb-5">
-                Pesan notifikasi ...
+                Pesan ...
             </p>
             <button onclick="closeModernAlert()" class="w-full bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2.5 rounded-xl text-xs transition active:scale-95">
                 Baik
@@ -34,7 +34,7 @@
             </div>
             <h3 class="text-base font-bold text-slate-900 mb-1">Terdeteksi Pelanggaran!</h3>
             <p id="violationReason" class="text-xs text-slate-600 leading-relaxed mb-4">
-                Anda terdeteksi meninggalkan halaman ujian atau keluar dari mode layar penuh.
+                Anda terdeteksi meninggalkan halaman ujian atau keluar.
             </p>
             <div class="bg-slate-100 p-2.5 rounded-xl text-xs font-mono text-slate-700 mb-5">
                 Jumlah Pelanggaran: <span id="violationCount" class="font-bold text-rose-600 text-sm">0</span> kali
@@ -45,36 +45,17 @@
         </div>
     </div>
 
-    <!-- MODAL AUTENTIKASI PASSWORD UJIAN (SESUAI GAMBAR 3) -->
-    <div id="tokenModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-[9000]">
-        <div class="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm text-left">
-            <h3 class="text-base font-bold text-slate-900 mb-1">Autentikasi Ujian</h3>
-            <p class="text-xs text-slate-500 mb-4">Masukkan password ujian yang diberikan oleh pengawas/proktor:</p>
+    <!-- MODAL PERMAINAN & VERIFIKASI PASSWORD KELUAR UJIAN -->
+    <div id="exitGameModal" class="fixed inset-0 bg-black/75 backdrop-blur-md hidden flex items-center justify-center p-4 z-[9000]">
+        <div class="bg-white rounded-3xl p-6 w-full max-w-sm text-center shadow-2xl border border-slate-100">
+            <div class="inline-block bg-emerald-100 text-emerald-600 px-3 py-1 rounded-full text-[11px] font-bold mb-2">
+                ✅ Google Form Terkirim!
+            </div>
+            <h3 class="text-base font-bold text-slate-800 mb-1">🎮 Terima Kasih</h3>
+            <p class="text-xs text-slate-500 mb-4">Silakan menunggu pengawas memberikan Password Keluar Ujian.</p>
             
-            <form id="tokenForm" class="space-y-4">
-                <div>
-                    <label class="block text-xs font-bold text-blue-600 mb-1">Password Ujian</label>
-                    <input type="password" id="inputExamToken" class="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm font-mono text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 transition" placeholder="******" required>
-                </div>
-                <div class="flex space-x-3 pt-2">
-                    <button type="button" onclick="closeTokenModal()" class="w-1/2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2.5 rounded-xl text-xs transition">
-                        BATAL
-                    </button>
-                    <button type="submit" class="w-1/2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl text-xs transition shadow-md">
-                        MULAI UJIAN
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- MODAL MINI GAME MENUNGGU -->
-    <div id="gameModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-[9000]">
-        <div class="bg-white rounded-2xl p-6 w-full max-w-xs text-center shadow-2xl border border-slate-100">
-            <h3 class="text-sm font-bold text-slate-800 mb-1">🎮 Terima Kasih</h3>
-            <p class="text-[11px] text-slate-500 mb-4">Password keluat ujian akan diberikan oleh pengawas</p>
-            
-            <div id="gameBoard" class="grid grid-cols-3 gap-2 bg-slate-100 p-3 rounded-2xl mx-auto w-fit mb-4">
+            <!-- BOARD TIC TAC TOE -->
+            <div id="gameBoard" class="grid grid-cols-3 gap-2 bg-slate-100 p-3 rounded-2xl mx-auto w-fit mb-3">
                 <div class="cell bg-white rounded-xl text-slate-800 border border-slate-200 shadow-sm" onclick="makeMove(0)"></div>
                 <div class="cell bg-white rounded-xl text-slate-800 border border-slate-200 shadow-sm" onclick="makeMove(1)"></div>
                 <div class="cell bg-white rounded-xl text-slate-800 border border-slate-200 shadow-sm" onclick="makeMove(2)"></div>
@@ -87,21 +68,26 @@
             </div>
 
             <p id="gameStatus" class="text-xs font-bold text-blue-600 mb-4">Giliran Pemain: X</p>
-            <div class="flex space-x-2">
-                <button onclick="resetGame()" class="w-1/2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2 rounded-xl text-xs">Reset</button>
-                <button onclick="toggleGameModal(false)" class="w-1/2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-xl text-xs">Tutup</button>
-            </div>
+            <button onclick="resetGame()" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-1.5 rounded-xl text-xs mb-4">Reset Papan Game</button>
+
+            <!-- FORM INPUT PASSWORD KELUAR PROKTOR -->
+            <form id="exitPasswordForm" class="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-left space-y-3">
+                <label class="block text-xs font-bold text-slate-700">Password Keluar</label>
+                <input type="password" id="inputExitPassword" class="w-full bg-white border border-slate-300 p-2.5 rounded-xl text-xs font-mono text-slate-800 outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Masukkan password exit" required>
+                <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl text-xs transition shadow-md">
+                    KELUAR UJIAN
+                </button>
+            </form>
         </div>
     </div>
 
-    <!-- SCREEN 1: HALAMAN LOGIN SISWA (SESUAI GAMBAR 2) -->
+    <!-- TAHAP 1: HALAMAN LOGIN SISWA -->
     <div id="studentLoginModal" class="min-h-screen flex flex-col items-center justify-center p-4">
         <div class="w-full max-w-sm text-center mb-6">
-            <!-- LOGO SEKOLAH -->
             <div class="w-20 h-20 mx-auto mb-3 flex items-center justify-center">
                 <img src="https://upload.wikimedia.org/wikipedia/commons/e/e4/Logo_SMA_Negeri_1_Jakarta.png" onerror="this.onerror=null; this.src='https://cdn-icons-png.flaticon.com/512/2991/2991108.png'" alt="Logo SMAN 1 Jakarta" class="w-full h-full object-contain">
             </div>
-            <p class="text-xs font-bold text-blue-600 tracking-wider uppercase mb-1">APLIKASI UJIAN</p>
+            <p class="text-xs font-bold text-blue-600 tracking-wider uppercase mb-1">CBT</p>
             <h1 class="text-xl font-black text-slate-900">SMA NEGERI 1 JAKARTA</h1>
             <p class="text-xs text-slate-500 mt-1">Masukkan NISN dan Password untuk memulai</p>
         </div>
@@ -109,7 +95,7 @@
         <div class="bg-white rounded-3xl shadow-xl border border-slate-100 p-6 w-full max-w-sm">
             <form id="studentLoginForm" class="space-y-4">
                 <div>
-                    <label class="block text-xs font-bold text-slate-700 mb-1.5">Pilih Angkatan / Server</label>
+                    <label class="block text-xs font-bold text-slate-700 mb-1.5">Pilih Kelas</label>
                     <select id="serverAngkatan" class="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 transition">
                         <option value="X">Kelas X</option>
                         <option value="XI">Kelas XI</option>
@@ -132,9 +118,8 @@
         <p class="text-[11px] text-slate-400 mt-6 font-medium">1.0 SMAN 1 JAKARTA</p>
     </div>
 
-    <!-- SCREEN 2: HALAMAN DASHBOARD MAPEL (SESUAI GAMBAR 1) -->
+    <!-- TAHAP 2: DASHBOARD PILIH UJIAN HARI INI -->
     <div id="examApp" class="hidden min-h-screen flex flex-col">
-        <!-- HEADER BIRU SMAN 1 JAKARTA -->
         <header class="bg-blue-600 text-white p-6 shadow-md relative">
             <div class="max-w-md mx-auto flex justify-between items-start">
                 <div>
@@ -142,14 +127,9 @@
                     <h1 class="text-xl font-bold">Selamat Datang, <span id="lblStudentName">Siswa</span></h1>
                     <p id="lblStudentClass" class="text-xs text-blue-100 mt-1 font-mono">-</p>
                 </div>
-                <div class="flex items-center space-x-2">
-                    <button onclick="toggleGameModal(true)" class="bg-blue-500/80 hover:bg-blue-500 text-white text-xs font-bold px-2.5 py-1.5 rounded-lg border border-blue-400 transition" title="Main Game">
-                        🎮
-                    </button>
-                    <button onclick="logoutExam()" class="bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition">
-                        Keluar
-                    </button>
-                </div>
+                <button onclick="logoutExam()" class="bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition">
+                    Keluar
+                </button>
             </div>
         </header>
 
@@ -161,18 +141,15 @@
         </main>
     </div>
 
-    <!-- SCREEN 3: LAYAR FRAME GOOGLE FORM EMBEDDED -->
+    <!-- TAHAP 3: EMBEDDED GOOGLE FORM UJIAN -->
     <div id="examFrameContainer" class="hidden fixed inset-0 bg-slate-900 z-50 flex flex-col w-full h-full">
         <header class="bg-blue-600 text-white p-3 flex justify-between items-center h-14 shrink-0 shadow-md">
-    <div class="flex items-center space-x-2">
-        <span id="activeExamTitle" class="font-bold text-xs flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Mode Ujian Terkunci
-        </span>
-    </div>
-    <button onclick="cancelExamFrame()" class="bg-rose-500 hover:bg-rose-600 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition shadow">
-        Keluar Ujian
-    </button>
-</header>
+            <div class="flex items-center space-x-2">
+                <span id="activeExamTitle" class="font-bold text-xs flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Mode Ujian
+                </span>
+            </div>
+        </header>
         <div class="flex-1 w-full h-full relative bg-white">
             <iframe id="examIframe" class="w-full h-full border-0" src="" allowfullscreen></iframe>
         </div>
