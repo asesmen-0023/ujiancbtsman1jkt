@@ -2,13 +2,6 @@ let gameState = ["", "", "", "", "", "", "", "", ""];
 let currentPlayer = "X";
 let gameActive = true;
 
-function toggleGameModal(show) {
-    if (typeof playSound === 'function') playSound('click');
-    const modal = document.getElementById('gameModal');
-    if (show) modal?.classList.remove('hidden');
-    else modal?.classList.add('hidden');
-}
-
 function makeMove(index) {
     if (gameState[index] !== "" || !gameActive) return;
     if (typeof playSound === 'function') playSound('click');
