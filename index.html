@@ -165,18 +165,22 @@
     </div>
 
     <!-- TAHAP 3: EMBEDDED GOOGLE FORM UJIAN -->
-    <div id="examFrameContainer" class="hidden fixed inset-0 bg-slate-900 z-50 flex flex-col w-full h-full">
-        <header class="bg-blue-600 text-white p-3 flex justify-between items-center h-14 shrink-0 shadow-md">
-            <div class="flex items-center space-x-2">
-                <span id="activeExamTitle" class="font-bold text-xs flex items-center gap-2">
-                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Mode Ujian
-                </span>
-            </div>
-        </header>
-        <div class="flex-1 w-full h-full relative bg-white">
-            <iframe id="examIframe" class="w-full h-full border-0" src="" allowfullscreen></iframe>
+<div id="examFrameContainer" class="hidden fixed inset-0 bg-slate-900 z-50 flex flex-col w-full h-full">
+    <header class="bg-blue-600 text-white p-3 flex justify-between items-center h-14 shrink-0 shadow-md">
+        <div class="flex items-center space-x-2">
+            <span id="activeExamTitle" class="font-bold text-xs flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Mode Ujian
+            </span>
         </div>
+        <!-- TOMBOL BACKUP UNTUK SISWA MENGKONFIRMASI PENYELESAIAN -->
+        <button onclick="confirmFinished()" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition shadow border border-emerald-400">
+            ✅ Saya Sudah Kirim
+        </button>
+    </header>
+    <div class="flex-1 w-full h-full relative bg-white">
+        <iframe id="examIframe" class="w-full h-full border-0" src="" allowfullscreen></iframe>
     </div>
+</div>
 
     <script src="game.js"></script>
     <script src="app.js"></script>
