@@ -9,6 +9,25 @@
 </head>
 <body class="bg-slate-900 text-slate-100 font-sans select-none" oncontextmenu="return false;">
 
+    <!-- MODAL PERINGATAN PELANGGARAN / DISTRAKSI -->
+    <div id="violationModal" class="fixed inset-0 bg-rose-950/90 backdrop-blur-md hidden flex items-center justify-center p-4 z-[9999]">
+        <div class="bg-slate-900 border border-rose-500 rounded-2xl p-6 w-full max-w-sm text-center shadow-2xl">
+            <div class="w-12 h-12 rounded-full bg-rose-500/20 text-rose-500 flex items-center justify-center mx-auto mb-3 font-bold text-2xl">
+                ⚠️
+            </div>
+            <h3 class="text-lg font-black text-white mb-2">Terdeteksi Pelanggaran!</h3>
+            <p id="violationReason" class="text-xs text-rose-200 leading-relaxed mb-4">
+                Anda terdeteksi meninggalkan halaman ujian atau keluar dari mode layar penuh.
+            </p>
+            <div class="bg-slate-800 p-2.5 rounded-xl border border-slate-700 text-xs font-mono text-slate-300 mb-5">
+                Jumlah Pelanggaran: <span id="violationCount" class="font-bold text-amber-400 text-sm">0</span> kali
+            </div>
+            <button onclick="resumeExam()" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 rounded-xl text-xs transition">
+                Kembali ke Ujian & Fullscreen
+            </button>
+        </div>
+    </div>
+
     <!-- MODAL LOGIN SISWA -->
     <div id="studentLoginModal" class="fixed inset-0 bg-slate-950 flex items-center justify-center p-4 z-50">
         <div class="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-8 w-full max-w-md">
@@ -47,7 +66,7 @@
             <button onclick="logoutExam()" class="bg-rose-600 hover:bg-rose-700 text-xs font-bold px-4 py-2 rounded-lg transition">Keluar Ujian</button>
         </header>
 
-        <main class="flex-1 p-4 max-w-5xl mx-auto w-full">
+        <main class="flex-1 p-6 max-w-5xl mx-auto w-full">
             <h2 class="text-lg font-bold mb-4">Daftar Soal Ujian Tersedia</h2>
             <div id="examListContainer" class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <!-- List soal dari Supabase akan dirender di sini -->
@@ -56,7 +75,6 @@
     </div>
 
     <script>
-        // Konfigurasi 3 URL & Kunci Supabase Anda (Persis seperti yang di Android)
         const SUPABASE_CONFIGS = {
             'X': { url: 'https://ulroqkrnwzzrgkasrqit.supabase.co', key: 'sb_publishable_DJm-HRJpia9X3CzOlBq61Q_Dqct-DPi' },
             'XI': { url: 'URL_SUPABASE_KELAS_XI', key: 'KEY_SUPABASE_KELAS_XI' },
@@ -65,6 +83,8 @@
 
         let currentClient = null;
         let loggedInStudent = null;
+        let violations = 0;
+        let isExamActive = false;
 
         document.getElementById('studentLoginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -75,7 +95,6 @@
             const config = SUPABASE_CONFIGS[angkatan];
             currentClient = supabase.createClient(config.url, config.key);
 
-            // Cek data siswa ke tabel 'students'
             const { data, error } = await currentClient
                 .from('students')
                 .select('*')
@@ -87,7 +106,6 @@
                 return;
             }
 
-            // Validasi password (default password adalah NISN jika kolom password kosong)
             const validPassword = data.password ? data.password : data.nisn;
             if (pass !== validPassword) {
                 alert('Password salah!');
@@ -95,13 +113,15 @@
             }
 
             loggedInStudent = data;
+            isExamActive = true;
             
-            // Tampilkan UI Ujian & Sembunyikan Login
             document.getElementById('studentLoginModal').classList.add('hidden');
             document.getElementById('examApp').classList.remove('hidden');
             document.getElementById('lblStudentName').innerText = data.nama;
             document.getElementById('lblStudentClass').innerText = `Kelas: ${data.student_class} | NISN: ${data.nisn}`;
 
+            // Aktifkan mode Fullscreen saat masuk
+            requestFullscreenMode();
             loadAvailableExams(data.student_class);
         });
 
@@ -118,7 +138,7 @@
             }
 
             container.innerHTML = data.map(exam => `
-                <div class="bg-slate-800 border border-slate-700 p-5 rounded-xl flex flex-col justify-between">
+                <div class="bg-slate-800 border border-slate-700 p-5 rounded-xl flex flex-col justify-between shadow-sm">
                     <div>
                         <span class="bg-blue-900 text-blue-200 text-[10px] font-bold px-2.5 py-1 rounded-full">${exam.student_class}</span>
                         <h3 class="font-bold text-white text-base mt-2">${exam.subject_name}</h3>
@@ -131,7 +151,6 @@
         }
 
         function startExam(url, examId) {
-            // Catat ke exam_submissions bahwa siswa mulai mengerjakan
             currentClient.from('exam_submissions').insert([{
                 nisn: loggedInStudent.nisn,
                 student_name: loggedInStudent.nama,
@@ -139,21 +158,64 @@
                 subject_id: examId,
                 is_completed: false
             }]).then(() => {
-                window.location.href = url; // Buka Google Form / link soal
+                window.location.href = url;
             });
         }
 
         function logoutExam() {
+            isExamActive = false;
             location.reload();
         }
 
-        // Skrip Deteksi Pelanggaran Sederhana (Anti-Kecurangan Web)
+        // ==========================================
+        // LOGIKA KEAMANAN & DETEKSI DISTRAKSI
+        // ==========================================
+
+        function triggerViolationNotice(reason) {
+            if (!isExamActive) return;
+
+            violations++;
+            document.getElementById('violationReason').innerText = reason;
+            document.getElementById('violationCount').innerText = violations;
+            document.getElementById('violationModal').classList.remove('hidden');
+        }
+
+        function resumeExam() {
+            document.getElementById('violationModal').classList.add('hidden');
+            requestFullscreenMode();
+        }
+
+        function requestFullscreenMode() {
+            const elem = document.documentElement;
+            if (elem.requestFullscreen) {
+                elem.requestFullscreen().catch(() => {});
+            } else if (elem.webkitRequestFullscreen) { /* Safari / iOS */
+                elem.webkitRequestFullscreen();
+            }
+        }
+
+        // 1. Deteksi Pindah Tab / Minimalkan Browser
         document.addEventListener('visibilitychange', () => {
-            if (document.hidden && loggedInStudent) {
-                alert('PPERINGATAN: Anda terdeteksi keluar dari jendela ujian!');
-                // Opsional: Catat log pelanggaran ke tabel 'violations' di Supabase
+            if (document.hidden) {
+                triggerViolationNotice('Dilarang berpindah tab atau meminimalkan browser!');
             }
         });
+
+        // 2. Deteksi Kehilangan Fokus (Ter-distraksi Aplikasi Lain / Split Screen)
+        window.addEventListener('blur', () => {
+            triggerViolationNotice('Dilarang membuka/mengaktifkan aplikasi lain saat ujian!');
+        });
+
+        // 3. Deteksi Keluar dari Mode Layar Penuh (Fullscreen Change)
+        const handleFullscreenChange = () => {
+            const isFullscreen = document.fullscreenElement || document.webkitFullscreenElement;
+            if (!isFullscreen && isExamActive) {
+                triggerViolationNotice('Layar ujian wajib dalam mode layar penuh (Fullscreen)!');
+            }
+        };
+
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+        document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
     </script>
 </body>
 </html>
