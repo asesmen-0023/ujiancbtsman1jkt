@@ -22,7 +22,8 @@ let loggedInStudent = null;
 let violations = 0;
 let isExamActive = false;
 let pendingExam = null;
-let currentAppSettings = null; // Menyimpan data app_settings (enter_password, exit_password)
+let currentAppSettings = null;
+let iframeLoadCount = 0; // Penanda untuk mendeteksi submit form
 
 // Web Audio Synthesizer
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -52,13 +53,15 @@ function playSound(type) {
         osc.start();
         osc.stop(audioCtx.currentTime + 0.08);
     } else if (type === 'success') {
+        // Nada Efek Berhasil Submit GForm (Melodi Sukses)
         osc.type = 'triangle';
-        osc.frequency.setValueAtTime(523.25, audioCtx.currentTime);
-        osc.frequency.setValueAtTime(659.25, audioCtx.currentTime + 0.1);
-        gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+        osc.frequency.setValueAtTime(523.25, audioCtx.currentTime); // C5
+        osc.frequency.setValueAtTime(659.25, audioCtx.currentTime + 0.15); // E5
+        osc.frequency.setValueAtTime(783.99, audioCtx.currentTime + 0.3); // G5
+        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.6);
         osc.start();
-        osc.stop(audioCtx.currentTime + 0.3);
+        osc.stop(audioCtx.currentTime + 0.6);
     }
 }
 
@@ -97,7 +100,6 @@ document.getElementById('studentLoginForm')?.addEventListener('submit', async (e
         return;
     }
 
-    // 1. Cek Data Siswa
     const { data, error } = await currentClient
         .from('students')
         .select('*')
@@ -115,7 +117,7 @@ document.getElementById('studentLoginForm')?.addEventListener('submit', async (e
         return;
     }
 
-    // 2. Ambil Konfigurasi enter_password dari Tabel app_settings
+    // Ambil setting enter_password
     const { data: settingsData } = await currentClient
         .from('app_settings')
         .select('*')
@@ -123,7 +125,6 @@ document.getElementById('studentLoginForm')?.addEventListener('submit', async (e
         .maybeSingle();
 
     currentAppSettings = settingsData;
-
     loggedInStudent = data;
     isExamActive = true;
     
@@ -136,7 +137,7 @@ document.getElementById('studentLoginForm')?.addEventListener('submit', async (e
     loadAvailableExams(data.student_class);
 });
 
-// MEMUAT SOAL DENGAN CARD TEMA SMAN 1 JAKARTA
+// LOAD DAFTAR SOAL & CEK STATUS TERKUNCI
 async function loadAvailableExams(studentClass) {
     const { data: exams, error } = await currentClient
         .from('exams')
@@ -172,7 +173,7 @@ async function loadAvailableExams(studentClass) {
             </div>
             ${isFinished ? `
                 <span class="text-xs font-bold text-slate-400 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
-                    Selesai
+                    🔒 Selesai
                 </span>
             ` : `
                 <button onclick="promptExamToken('${exam.id}', '${encodeURIComponent(exam.subject_name)}', '${encodeURIComponent(exam.form_url)}')" class="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 active:scale-95 transition">
@@ -183,7 +184,6 @@ async function loadAvailableExams(studentClass) {
     }).join('');
 }
 
-// MEMBUKA MODAL AUTHENTIKASI PASSWORD UJIAN
 function promptExamToken(id, name, formUrl) {
     playSound('click');
     pendingExam = {
@@ -210,7 +210,6 @@ document.getElementById('tokenForm')?.addEventListener('submit', async (e) => {
 
     if (!pendingExam) return;
 
-    // Ambil enter_password dari app_settings
     const requiredPassword = currentAppSettings?.enter_password || 'sman1jkt';
 
     if (inputToken !== requiredPassword) {
@@ -221,7 +220,10 @@ document.getElementById('tokenForm')?.addEventListener('submit', async (e) => {
     const examToStart = pendingExam;
     closeTokenModal();
 
-    // Catat awal pengerjaan ke Supabase
+    // Reset hitungan reload iframe
+    iframeLoadCount = 0;
+
+    // Record pengerjaan awal di Supabase
     await currentClient.from('exam_submissions').upsert([{
         nisn: loggedInStudent.nisn,
         student_name: loggedInStudent.nama,
@@ -230,38 +232,73 @@ document.getElementById('tokenForm')?.addEventListener('submit', async (e) => {
         is_completed: false
     }], { onConflict: 'nisn,subject_id' });
 
-    // Buka iframe Google Form
     const iframe = document.getElementById('examIframe');
     const frameContainer = document.getElementById('examFrameContainer');
     const activeTitle = document.getElementById('activeExamTitle');
 
-    if (iframe) iframe.src = examToStart.formUrl;
+    if (iframe) {
+        iframe.src = examToStart.formUrl;
+        
+        // PASANG EVENT LISTENER ONLOAD UNTUK DETEKSI OTOMATIS SUBMIT GFORM
+        iframe.onload = handleIframeLoad;
+    }
+
     if (activeTitle) activeTitle.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Ujian: ${examToStart.subjectName}`;
     
     frameContainer?.classList.remove('hidden');
     requestFullscreenMode();
 });
 
-async function finishExamFrame() {
-    playSound('click');
-    if (confirm("Apakah Anda yakin telah selesai menjawab di Google Form? Status akan dikunci di database.")) {
-        if (pendingExam?.id && currentClient) {
-            await currentClient
-                .from('exam_submissions')
-                .update({ is_completed: true })
-                .eq('nisn', loggedInStudent.nisn)
-                .eq('subject_id', pendingExam.id);
-        }
+// LOGIKA OTOMATIS SAAT GOOGLE FORM TERKIRIM
+async function handleIframeLoad() {
+    iframeLoadCount++;
 
+    // Load pertama = memuat soal Google Form
+    // Load kedua = Google Form telah disubmit / dikirim siswa!
+    if (iframeLoadCount >= 2 && pendingExam) {
+        // 1. Bunyikan efek suara sukses!
         playSound('success');
+
+        // 2. Simpan status is_completed = true ke Supabase
+        await currentClient
+            .from('exam_submissions')
+            .update({ 
+                is_completed: true,
+                violation_count: violations 
+            })
+            .eq('nisn', loggedInStudent.nisn)
+            .eq('subject_id', pendingExam.id);
+
+        // 3. Tutup iframe & bersihkan state
         const iframe = document.getElementById('examIframe');
-        if (iframe) iframe.src = "";
+        if (iframe) {
+            iframe.onload = null;
+            iframe.src = "";
+        }
         document.getElementById('examFrameContainer')?.classList.add('hidden');
-        
+
+        // 4. Perbarui UI dashboard agar soal langsung TERKUNCI
         loadAvailableExams(loggedInStudent.student_class);
         requestFullscreenMode();
 
-        showModernAlert("Ujian telah selesai dikerjakan dan status terkunci di database.", "Ujian Selesai", "success");
+        // 5. Tampilkan notifikasi sukses
+        showModernAlert("Jawaban Google Form berhasil terkirim! Status ujian Anda telah otomatis terkunci di database.", "Ujian Berhasil Dikirim", "success");
+        pendingExam = null;
+    }
+}
+
+// Tombol Batal Keluar Darurat (Jika siswa membatalkan sebelum submit)
+function cancelExamFrame() {
+    playSound('click');
+    if (confirm("Apakah Anda yakin ingin keluar dari ujian ini? Jawaban yang belum dikirim ke Google Form mungkin tidak tersimpan.")) {
+        const iframe = document.getElementById('examIframe');
+        if (iframe) {
+            iframe.onload = null;
+            iframe.src = "";
+        }
+        document.getElementById('examFrameContainer')?.classList.add('hidden');
+        requestFullscreenMode();
+        pendingExam = null;
     }
 }
 
@@ -271,77 +308,35 @@ function logoutExam() {
     location.reload();
 }
 
-function triggerViolationNotice(reason) {
-    if (!isExamActive) return;
-
-    playSound('alarm');
-    violations++;
-    const vReason = document.getElementById('violationReason');
-    const vCount = document.getElementById('violationCount');
-    if (vReason) vReason.innerText = reason;
-    if (vCount) vCount.innerText = violations;
-    document.getElementById('violationModal')?.classList.remove('hidden');
-}
-
-function resumeExam() {
-    playSound('click');
-    document.getElementById('violationModal')?.classList.add('hidden');
-    requestFullscreenMode();
-}
-
-function requestFullscreenMode() {
-    const elem = document.documentElement;
-    if (elem.requestFullscreen) {
-        elem.requestFullscreen().catch(() => {});
-    } else if (elem.webkitRequestFullscreen) {
-        elem.webkitRequestFullscreen();
-    }
-}
-
-// ==========================================
-// LOGIKA KEAMANAN & DETEKSI DISTRAKSI (ANTI FALSE POSITIVE)
-// ==========================================
-
+// LOGIKA KEAMANAN DISTRAKSI (ANTI FALSE POSITIVE)
 let isInteractingWithForm = false;
 
-// 1. Deteksi Pindah Tab / Minimalkan Browser
 document.addEventListener('visibilitychange', () => {
-    // Jika browser benar-benar disembunyikan/dipindah tab
     if (document.hidden && isExamActive) {
         triggerViolationNotice('Dilarang berpindah tab atau meminimalkan browser!');
     }
 });
 
-// 2. Deteksi Kehilangan Fokus (Blur) yang Ditingkatkan
 window.addEventListener('blur', () => {
     if (!isExamActive) return;
 
-    // Beri jeda kecil 200ms untuk memvalidasi elemen mana yang sedang diakses siswa
     setTimeout(() => {
         const activeElem = document.activeElement;
-        
-        // A. Abaikan jika fokus berada di dalam iFrame (Google Form / input teks / upload file)
         const isIframeActive = activeElem && activeElem.tagName === 'IFRAME';
         
-        // B. Abaikan jika siswa sedang berinteraksi dengan elemen input/form internal
         if (isIframeActive || isInteractingWithForm) {
             return;
         }
 
-        // C. Hanya picu pelanggaran jika jendela browser benar-benar kehilangan fokus utama ke aplikasi luar
         if (!document.hasFocus()) {
             triggerViolationNotice('Dilarang membuka/mengaktifkan aplikasi lain saat ujian!');
         }
     }, 200);
 });
 
-// 3. Deteksi Keluar Mode Layar Penuh (Fullscreen Change)
 const handleFullscreenChange = () => {
     const isFullscreen = document.fullscreenElement || document.webkitFullscreenElement;
-    
-    // Jika keluar fullscreen saat ujian berlangsung
     if (!isFullscreen && isExamActive) {
-        // Beri jeda singkat memastikan bukan karena rotasi layar perangkat
         setTimeout(() => {
             const currentFullscreen = document.fullscreenElement || document.webkitFullscreenElement;
             if (!currentFullscreen && isExamActive) {
@@ -353,16 +348,3 @@ const handleFullscreenChange = () => {
 
 document.addEventListener('fullscreenchange', handleFullscreenChange);
 document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
-
-// 4. Mencegah Klik Kanan & Shortcut Keyboard Pengganggu di Luar iFrame
-document.addEventListener('keydown', (e) => {
-    // Blokir F12, Ctrl+Shift+I, Ctrl+U (Developer Tools & View Source)
-    if (
-        e.key === 'F12' || 
-        (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'i' || e.key === 'J' || e.key === 'j')) ||
-        (e.ctrlKey && (e.key === 'u' || e.key === 'U'))
-    ) {
-        e.preventDefault();
-        return false;
-    }
-});
