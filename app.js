@@ -65,7 +65,6 @@ function playSound(type) {
     }
 }
 
-// FUNGSI UTILITY DILETAKKAN DI ATAS AGAR TIDAK CAUSE REFERENCE ERROR
 function requestFullscreenMode() {
     const elem = document.documentElement;
     if (elem.requestFullscreen) {
@@ -145,7 +144,6 @@ document.getElementById('studentLoginForm')?.addEventListener('submit', async (e
         return;
     }
 
-    // Ambil settings app_settings untuk exit_password
     const { data: settingsData } = await currentClient
         .from('app_settings')
         .select('*')
@@ -165,12 +163,11 @@ document.getElementById('studentLoginForm')?.addEventListener('submit', async (e
     loadAvailableExams(data.student_class);
 });
 
-// 2. DASHBOARD SOAL UJIAN
+// 2. DASHBOARD SOAL UJIAN & DETEKSI TERKUNCI (FIXED ROBUST MATCHING)
 async function loadAvailableExams(studentClass) {
     const container = document.getElementById('examListContainer');
     if (!container) return;
 
-    // Ambil semua soal aktif
     const { data: exams, error } = await currentClient
         .from('exams')
         .select('*')
@@ -185,14 +182,19 @@ async function loadAvailableExams(studentClass) {
         return;
     }
 
-    // Ambil riwayat pengerjaan yang SUDAH SELESAI
+    // Ambil SEMUA riwayat pengerjaan siswa ini
     const { data: history } = await currentClient
         .from('exam_submissions')
-        .select('subject_id')
-        .eq('nisn', loggedInStudent.nisn)
-        .eq('is_completed', true);
+        .select('*')
+        .eq('nisn', String(loggedInStudent.nisn).trim());
 
-    const completedSubjectIds = (history || []).map(h => String(h.subject_id));
+    // Buat set ID yang berstatus is_completed: true (Dikonversi ke String)
+    const completedSubjectIds = new Set(
+        (history || [])
+            .filter(h => h.is_completed === true || String(h.is_completed) === 'true')
+            .map(h => String(h.subject_id).trim())
+    );
+
     const userClass = String(studentClass).trim().toLowerCase();
     
     const availableExams = (exams || []).filter(exam => {
@@ -212,18 +214,19 @@ async function loadAvailableExams(studentClass) {
     }
 
     container.innerHTML = availableExams.map(exam => {
-        const isFinished = completedSubjectIds.includes(String(exam.id));
+        const examIdStr = String(exam.id).trim();
+        const isFinished = completedSubjectIds.has(examIdStr);
         const subjectName = exam.subject_name || 'Uji Coba Ujian';
         const formUrl = exam.form_url || '';
 
         return `
-        <div class="exam-card flex justify-between items-center ${isFinished ? 'opacity-60' : ''}">
+        <div class="exam-card flex justify-between items-center ${isFinished ? 'opacity-60 bg-slate-50' : ''}">
             <div>
                 <h3 class="font-bold text-blue-600 text-base leading-snug">${subjectName}</h3>
                 <p class="text-xs text-slate-500 mt-0.5">Google Form Evaluasi Pembelajaran</p>
             </div>
             ${isFinished ? `
-                <span class="text-xs font-bold text-slate-400 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
+                <span class="text-xs font-bold text-slate-400 bg-slate-200 px-3 py-1.5 rounded-lg border border-slate-300 flex items-center gap-1">
                     🔒 Selesai
                 </span>
             ` : `
@@ -239,15 +242,16 @@ async function loadAvailableExams(studentClass) {
 async function startExamDirectly(id, name, formUrl) {
     playSound('click');
     activeExam = {
-        id: id,
+        id: String(id).trim(),
         subjectName: decodeURIComponent(name),
         formUrl: decodeURIComponent(formUrl)
     };
 
     iframeLoadCount = 0;
 
+    // Catat data awal pengerjaan (is_completed: false)
     await currentClient.from('exam_submissions').upsert([{
-        nisn: loggedInStudent.nisn,
+        nisn: String(loggedInStudent.nisn).trim(),
         student_name: loggedInStudent.nama,
         student_class: loggedInStudent.student_class,
         subject_id: activeExam.id,
@@ -269,40 +273,41 @@ async function startExamDirectly(id, name, formUrl) {
     requestFullscreenMode();
 }
 
-// 4. OTOMATISASI SUBMIT FORM
-// 4. OTOMATISASI SUBMIT FORM -> SEKETIKA UPDATE STATUS KE SUPABASE (RLS DISABLED FRIENDLY)
+// 4. OTOMATISASI SUBMIT FORM -> SEKETIKA UPDATE SUPABASE & KUNCI STATUS
 async function handleIframeSubmit() {
     iframeLoadCount++;
 
-    // Load ke-2 menandakan Google Form telah disubmit/dikirim oleh siswa
     if (iframeLoadCount >= 2 && activeExam) {
         playSound('success');
 
-        if (activeExam?.id && currentClient) {
-            const studentNisn = String(loggedInStudent.nisn).trim();
-            const subjectIdStr = String(activeExam.id).trim();
+        const studentNisn = String(loggedInStudent.nisn).trim();
+        const subjectIdStr = String(activeExam.id).trim();
 
-            // Lakukan UPSERT (Update jika sudah ada, Insert jika belum ada)
-            // Ini dijamin 100% memperbarui status is_completed menjadi true
-            const { error: upsertError } = await currentClient
+        // 1. Coba UPDATE terlebih dahulu
+        const { data: updateData, error: updateErr } = await currentClient
+            .from('exam_submissions')
+            .update({ 
+                is_completed: true,
+                violation_count: violations 
+            })
+            .eq('nisn', studentNisn)
+            .eq('subject_id', subjectIdStr)
+            .select();
+
+        // 2. Jika UPDATE tidak mengubah baris (misal karena constraint), jalankan UPSERT
+        if (updateErr || !updateData || updateData.length === 0) {
+            await currentClient
                 .from('exam_submissions')
-                .upsert({
+                .upsert([{
                     nisn: studentNisn,
                     student_name: loggedInStudent.nama,
                     student_class: loggedInStudent.student_class,
                     subject_id: subjectIdStr,
                     is_completed: true,
                     violation_count: violations
-                }, { onConflict: 'nisn,subject_id' });
-
-            if (upsertError) {
-                console.error("Gagal update status di Supabase:", upsertError);
-            } else {
-                console.log("Berhasil update status is_completed = TRUE ke Supabase!");
-            }
+                }], { onConflict: 'nisn,subject_id' });
         }
 
-        // Tutup Iframe Google Form
         const iframe = document.getElementById('examIframe');
         if (iframe) {
             iframe.onload = null;
@@ -310,35 +315,11 @@ async function handleIframeSubmit() {
         }
         document.getElementById('examFrameContainer')?.classList.add('hidden');
 
-        // Buka Modal Permainan & Verifikasi Password Exit
         if (typeof resetGame === 'function') resetGame();
         document.getElementById('inputExitPassword').value = '';
         document.getElementById('exitGameModal')?.classList.remove('hidden');
     }
 }
-
-// 5. VERIFIKASI EXIT PASSWORD (HANYA UNTUK MENUTUP MODAL GAME & KELUAR TAMPILAN)
-document.getElementById('exitPasswordForm')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    playSound('click');
-    const exitPassInput = document.getElementById('inputExitPassword').value.trim();
-    const requiredExitPassword = currentAppSettings?.exit_password || 'sman1jkt2';
-
-    if (exitPassInput !== requiredExitPassword) {
-        showModernAlert("Password Keluar Ujian yang Anda masukkan salah! Mintalah password exit resmi kepada pengawas kelas.", "Password Exit Salah", "error");
-        return;
-    }
-
-    playSound('success');
-    document.getElementById('exitGameModal')?.classList.add('hidden');
-    
-    // Refresh daftar soal di dashboard (kartu soal otomatis menjadi Terkunci)
-    loadAvailableExams(loggedInStudent.student_class);
-    requestFullscreenMode();
-
-    showModernAlert("Jawaban Anda telah tersimpan dan status ujian telah dikunci di database.", "Ujian Selesai", "success");
-    activeExam = null;
-});
 
 // 5. VERIFIKASI EXIT PASSWORD
 document.getElementById('exitPasswordForm')?.addEventListener('submit', async (e) => {
@@ -352,20 +333,10 @@ document.getElementById('exitPasswordForm')?.addEventListener('submit', async (e
         return;
     }
 
-    if (activeExam?.id && currentClient) {
-        await currentClient
-            .from('exam_submissions')
-            .update({ 
-                is_completed: true,
-                violation_count: violations 
-            })
-            .eq('nisn', loggedInStudent.nisn)
-            .eq('subject_id', activeExam.id);
-    }
-
     playSound('success');
     document.getElementById('exitGameModal')?.classList.add('hidden');
     
+    // Refresh otomatis dashboard siswa (Kartu mapel langsung berubah menjadi 🔒 Selesai)
     loadAvailableExams(loggedInStudent.student_class);
     requestFullscreenMode();
 
@@ -379,7 +350,7 @@ function logoutExam() {
     location.reload();
 }
 
-// EVENT LISTENERS DETEKSI DISTRAKSI
+// EVENT LISTENERS KEAMANAN DISTRAKSI
 document.addEventListener('visibilitychange', () => {
     if (document.hidden && isExamActive) {
         triggerViolationNotice('Dilarang berpindah tab atau meminimalkan browser!');
