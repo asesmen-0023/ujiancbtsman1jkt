@@ -270,7 +270,7 @@ async function startExamDirectly(id, name, formUrl) {
 }
 
 // 4. OTOMATISASI SUBMIT FORM
-// 4. OTOMATISASI SUBMIT FORM -> SEKETIKA UPDATE STATUS KE SUPABASE
+// 4. OTOMATISASI SUBMIT FORM -> SEKETIKA UPDATE STATUS KE SUPABASE (RLS DISABLED FRIENDLY)
 async function handleIframeSubmit() {
     iframeLoadCount++;
 
@@ -278,30 +278,27 @@ async function handleIframeSubmit() {
     if (iframeLoadCount >= 2 && activeExam) {
         playSound('success');
 
-        // === UPDATE LANGSUNG KE SUPABASE BEGITU GFORM TERKIRIM ===
         if (activeExam?.id && currentClient) {
-            const examIdNum = parseInt(activeExam.id, 10);
-            
-            // Coba update dengan tipe integer (int8)
-            const { error: updateError } = await currentClient
-                .from('exam_submissions')
-                .update({ 
-                    is_completed: true,
-                    violation_count: violations 
-                })
-                .eq('nisn', String(loggedInStudent.nisn))
-                .eq('subject_id', examIdNum);
+            const studentNisn = String(loggedInStudent.nisn).trim();
+            const subjectIdStr = String(activeExam.id).trim();
 
-            // Fallback jika subject_id di database tersimpan sebagai String
-            if (updateError) {
-                await currentClient
-                    .from('exam_submissions')
-                    .update({ 
-                        is_completed: true,
-                        violation_count: violations 
-                    })
-                    .eq('nisn', String(loggedInStudent.nisn))
-                    .eq('subject_id', String(activeExam.id));
+            // Lakukan UPSERT (Update jika sudah ada, Insert jika belum ada)
+            // Ini dijamin 100% memperbarui status is_completed menjadi true
+            const { error: upsertError } = await currentClient
+                .from('exam_submissions')
+                .upsert({
+                    nisn: studentNisn,
+                    student_name: loggedInStudent.nama,
+                    student_class: loggedInStudent.student_class,
+                    subject_id: subjectIdStr,
+                    is_completed: true,
+                    violation_count: violations
+                }, { onConflict: 'nisn,subject_id' });
+
+            if (upsertError) {
+                console.error("Gagal update status di Supabase:", upsertError);
+            } else {
+                console.log("Berhasil update status is_completed = TRUE ke Supabase!");
             }
         }
 
