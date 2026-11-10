@@ -138,11 +138,13 @@ document.getElementById('studentLoginForm')?.addEventListener('submit', async (e
 
 // 2. DASHBOARD SOAL UJIAN
 async function loadAvailableExams(studentClass) {
+    // 1. Ambil semua soal yang sedang AKTIF di server angkatan ini
     const { data: exams, error } = await currentClient
         .from('exams')
         .select('*')
         .eq('is_active', true);
 
+    // 2. Ambil riwayat pengerjaan siswa ini dari Supabase
     const { data: history } = await currentClient
         .from('exam_submissions')
         .select('*')
@@ -153,6 +155,7 @@ async function loadAvailableExams(studentClass) {
         .map(h => String(h.subject_id));
 
     const container = document.getElementById('examListContainer');
+
     if (error || !exams || exams.length === 0) {
         container.innerHTML = `
             <div class="bg-white border border-slate-200 p-6 rounded-2xl text-center shadow-sm">
@@ -161,13 +164,40 @@ async function loadAvailableExams(studentClass) {
         return;
     }
 
-    container.innerHTML = exams.map(exam => {
+    // 3. Filter fleksibel: Cek kolom target_rombel, class_target, atau student_class
+    const filteredExams = exams.filter(exam => {
+        // Ambil nilai target kelas dari berbagai kemungkinan nama kolom di tabel exams
+        const targetRombel = exam.target_rombel || exam.class_target || exam.student_class || '';
+        
+        // Jika kolom target rombel kosong atau bernilai 'semua', tampilkan ke semua siswa
+        if (!targetRombel || targetRombel.toLowerCase() === 'semua') return true;
+
+        const dbClass = String(targetRombel).toLowerCase().trim();
+        const userClass = String(studentClass).toLowerCase().trim();
+
+        return dbClass === userClass || 
+               userClass.includes(dbClass) || 
+               dbClass.includes(userClass);
+    });
+
+    if (filteredExams.length === 0) {
+        container.innerHTML = `
+            <div class="bg-white border border-slate-200 p-6 rounded-2xl text-center shadow-sm">
+                <p class="text-slate-500 text-xs font-semibold">Belum ada kelas ujian aktif yang ditargetkan untuk kelas Anda (${studentClass}).</p>
+            </div>`;
+        return;
+    }
+
+    // 4. Render Kartu Soal
+    container.innerHTML = filteredExams.map(exam => {
         const isFinished = completedSubjectIds.includes(String(exam.id));
+        const subjectName = exam.subject_name || exam.mata_pelajaran || 'Uji Coba Ujian';
+        const formUrl = exam.form_url || exam.link_form || '';
 
         return `
         <div class="exam-card flex justify-between items-center ${isFinished ? 'opacity-60' : ''}">
             <div>
-                <h3 class="font-bold text-blue-600 text-base leading-snug">${exam.subject_name}</h3>
+                <h3 class="font-bold text-blue-600 text-base leading-snug">${subjectName}</h3>
                 <p class="text-xs text-slate-500 mt-0.5">Google Form Evaluasi Pembelajaran</p>
             </div>
             ${isFinished ? `
@@ -175,7 +205,7 @@ async function loadAvailableExams(studentClass) {
                     🔒 Selesai
                 </span>
             ` : `
-                <button onclick="startExamDirectly('${exam.id}', '${encodeURIComponent(exam.subject_name)}', '${encodeURIComponent(exam.form_url)}')" class="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 active:scale-95 transition">
+                <button onclick="startExamDirectly('${exam.id}', '${encodeURIComponent(subjectName)}', '${encodeURIComponent(formUrl)}')" class="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 active:scale-95 transition">
                     Mulai &rarr;
                 </button>
             `}
