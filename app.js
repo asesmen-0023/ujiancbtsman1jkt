@@ -270,12 +270,42 @@ async function startExamDirectly(id, name, formUrl) {
 }
 
 // 4. OTOMATISASI SUBMIT FORM
-function handleIframeSubmit() {
+// 4. OTOMATISASI SUBMIT FORM -> SEKETIKA UPDATE STATUS KE SUPABASE
+async function handleIframeSubmit() {
     iframeLoadCount++;
 
+    // Load ke-2 menandakan Google Form telah disubmit/dikirim oleh siswa
     if (iframeLoadCount >= 2 && activeExam) {
         playSound('success');
 
+        // === UPDATE LANGSUNG KE SUPABASE BEGITU GFORM TERKIRIM ===
+        if (activeExam?.id && currentClient) {
+            const examIdNum = parseInt(activeExam.id, 10);
+            
+            // Coba update dengan tipe integer (int8)
+            const { error: updateError } = await currentClient
+                .from('exam_submissions')
+                .update({ 
+                    is_completed: true,
+                    violation_count: violations 
+                })
+                .eq('nisn', String(loggedInStudent.nisn))
+                .eq('subject_id', examIdNum);
+
+            // Fallback jika subject_id di database tersimpan sebagai String
+            if (updateError) {
+                await currentClient
+                    .from('exam_submissions')
+                    .update({ 
+                        is_completed: true,
+                        violation_count: violations 
+                    })
+                    .eq('nisn', String(loggedInStudent.nisn))
+                    .eq('subject_id', String(activeExam.id));
+            }
+        }
+
+        // Tutup Iframe Google Form
         const iframe = document.getElementById('examIframe');
         if (iframe) {
             iframe.onload = null;
@@ -283,11 +313,35 @@ function handleIframeSubmit() {
         }
         document.getElementById('examFrameContainer')?.classList.add('hidden');
 
+        // Buka Modal Permainan & Verifikasi Password Exit
         if (typeof resetGame === 'function') resetGame();
         document.getElementById('inputExitPassword').value = '';
         document.getElementById('exitGameModal')?.classList.remove('hidden');
     }
 }
+
+// 5. VERIFIKASI EXIT PASSWORD (HANYA UNTUK MENUTUP MODAL GAME & KELUAR TAMPILAN)
+document.getElementById('exitPasswordForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    playSound('click');
+    const exitPassInput = document.getElementById('inputExitPassword').value.trim();
+    const requiredExitPassword = currentAppSettings?.exit_password || 'sman1jkt2';
+
+    if (exitPassInput !== requiredExitPassword) {
+        showModernAlert("Password Keluar Ujian yang Anda masukkan salah! Mintalah password exit resmi kepada pengawas kelas.", "Password Exit Salah", "error");
+        return;
+    }
+
+    playSound('success');
+    document.getElementById('exitGameModal')?.classList.add('hidden');
+    
+    // Refresh daftar soal di dashboard (kartu soal otomatis menjadi Terkunci)
+    loadAvailableExams(loggedInStudent.student_class);
+    requestFullscreenMode();
+
+    showModernAlert("Jawaban Anda telah tersimpan dan status ujian telah dikunci di database.", "Ujian Selesai", "success");
+    activeExam = null;
+});
 
 // 5. VERIFIKASI EXIT PASSWORD
 document.getElementById('exitPasswordForm')?.addEventListener('submit', async (e) => {
