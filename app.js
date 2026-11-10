@@ -228,7 +228,7 @@ async function loadAvailableExams(studentClass) {
                     🔒 Selesai
                 </span>
             ` : `
-                <button onclick="startExamDirectly('${exam.id}', '${encodeURIComponent(subjectName)}', '${encodeURIComponent(formUrl)}')" class="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 active:scale-95 transition">
+                <button onclick="promptExamToken('${exam.id}', '${encodeURIComponent(subjectName)}', '${encodeURIComponent(formUrl)}')" class="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 active:scale-95 transition">
                     Mulai &rarr;
                 </button>
             `}
@@ -236,8 +236,8 @@ async function loadAvailableExams(studentClass) {
     }).join('');
 }
 
-// 3. MULAI UJIAN
-async function startExamDirectly(id, name, formUrl) {
+// 2.1 POPUP INPUT ENTER PASSWORD
+function promptExamToken(id, name, formUrl) {
     playSound('click');
     activeExam = {
         id: String(id).trim(),
@@ -245,9 +245,41 @@ async function startExamDirectly(id, name, formUrl) {
         formUrl: decodeURIComponent(formUrl)
     };
 
+    document.getElementById('inputExamToken').value = '';
+    document.getElementById('tokenModal')?.classList.remove('hidden');
+}
+
+function closeTokenModal() {
+    playSound('click');
+    document.getElementById('tokenModal')?.classList.add('hidden');
+    activeExam = null;
+}
+
+// 2.2 VERIFIKASI ENTER PASSWORD DARI APP_SETTINGS
+document.getElementById('tokenForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    playSound('click');
+    const inputToken = document.getElementById('inputExamToken').value.trim();
+
+    if (!activeExam) return;
+
+    const requiredEnterPassword = currentAppSettings?.enter_password || 'sman1jkt';
+
+    if (inputToken !== requiredEnterPassword) {
+        showModernAlert("Password Ujian yang Anda masukkan salah! Mintalah password resmi kepada pengawas kelas.", "Password Ujian Salah", "error");
+        return;
+    }
+
+    closeTokenModal();
+    startExamDirectly();
+});
+
+// 3. PENYEDIAAN FRAME EMBEDDED GOOGLE FORM
+async function startExamDirectly() {
+    if (!activeExam) return;
+
     iframeLoadCount = 0;
 
-    // Catat data awal pengerjaan ke Supabase
     await currentClient.from('exam_submissions').upsert([{
         nisn: String(loggedInStudent.nisn).trim(),
         student_name: loggedInStudent.nama,
@@ -271,7 +303,7 @@ async function startExamDirectly(id, name, formUrl) {
     requestFullscreenMode();
 }
 
-// FUNGSI UTAMA PENYIMPANAN + CATCH ERROR KE POPUP MODERN ALERT (SARAN CLAUDE A)
+// FUNGSI PENYIMPANAN SUPABASE DENGAN CATCH ERROR
 async function markExamCompleted() {
     if (!activeExam || !loggedInStudent || !currentClient) return false;
 
@@ -290,14 +322,13 @@ async function markExamCompleted() {
         }], { onConflict: 'nisn,subject_id' });
 
     if (error) {
-        // Tampilkan pesan error RLS / Constraint langsung di modal alert siswa!
         showModernAlert('Gagal menyimpan status ke Supabase: ' + error.message, 'Database Error', 'error');
         return false;
     }
     return true;
 }
 
-// MEMINDAHKAN PROSES PENUTUPAN IFRAME & TAMPILKAN POPUP KELUAR (SARAN CLAUDE B)
+// BUKA TAMPILAN STANDBY MINI GAME FULLSCREEN
 function finishExamUI() {
     playSound('success');
 
@@ -309,11 +340,14 @@ function finishExamUI() {
     document.getElementById('examFrameContainer')?.classList.add('hidden');
 
     if (typeof resetGame === 'function') resetGame();
-    document.getElementById('inputExitPassword').value = '';
     document.getElementById('exitGameModal')?.classList.remove('hidden');
+
+    if (loggedInStudent) {
+        loadAvailableExams(loggedInStudent.student_class);
+    }
 }
 
-// 4. OTOMATISASI DETEKSI DETIK IFRAME SUBMIT
+// 4. DETEKSI IFRAME SUBMIT GOOGLE FORM
 async function handleIframeSubmit() {
     iframeLoadCount++;
 
@@ -336,35 +370,13 @@ async function confirmFinished() {
     }
 }
 
-// 5. VERIFIKASI EXIT PASSWORD
-document.getElementById('exitPasswordForm')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    playSound('click');
-    const exitPassInput = document.getElementById('inputExitPassword').value.trim();
-    const requiredExitPassword = currentAppSettings?.exit_password || 'sman1jkt2';
-
-    if (exitPassInput !== requiredExitPassword) {
-        showModernAlert("Password Keluar Ujian yang Anda masukkan salah! Mintalah password exit resmi kepada pengawas kelas.", "Password Exit Salah", "error");
-        return;
-    }
-
-    playSound('success');
-    document.getElementById('exitGameModal')?.classList.add('hidden');
-    
-    loadAvailableExams(loggedInStudent.student_class);
-    requestFullscreenMode();
-
-    showModernAlert("Ujian telah sukses diverifikasi pengawas dan status otomatis terkunci di database.", "Ujian Selesai", "success");
-    activeExam = null;
-});
-
 function logoutExam() {
     playSound('click');
     isExamActive = false;
     location.reload();
 }
 
-// EVENT LISTENERS KEAMANAN DISTRAKSI
+// LOGIKA KEAMANAN DISTRAKSI (ANTI FALSE POSITIVE)
 document.addEventListener('visibilitychange', () => {
     if (document.hidden && isExamActive) {
         triggerViolationNotice('Dilarang berpindah tab atau meminimalkan browser!');
