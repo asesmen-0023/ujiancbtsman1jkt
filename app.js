@@ -21,7 +21,8 @@ let currentClient = null;
 let loggedInStudent = null;
 let violations = 0;
 let isExamActive = false;
-let pendingExam = null; // Menyimpan data exam yang akan diverifikasi token-nya
+let pendingExam = null;
+let currentAppSettings = null; // Menyimpan data app_settings (enter_password, exit_password)
 
 // Web Audio Synthesizer
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -96,6 +97,7 @@ document.getElementById('studentLoginForm')?.addEventListener('submit', async (e
         return;
     }
 
+    // 1. Cek Data Siswa
     const { data, error } = await currentClient
         .from('students')
         .select('*')
@@ -112,6 +114,15 @@ document.getElementById('studentLoginForm')?.addEventListener('submit', async (e
         showModernAlert('Password yang Anda masukkan salah!', 'Password Salah', 'error');
         return;
     }
+
+    // 2. Ambil Konfigurasi enter_password dari Tabel app_settings
+    const { data: settingsData } = await currentClient
+        .from('app_settings')
+        .select('*')
+        .limit(1)
+        .maybeSingle();
+
+    currentAppSettings = settingsData;
 
     loggedInStudent = data;
     isExamActive = true;
@@ -164,7 +175,7 @@ async function loadAvailableExams(studentClass) {
                     Selesai
                 </span>
             ` : `
-                <button onclick="promptExamToken('${exam.id}', '${encodeURIComponent(exam.subject_name)}', '${encodeURIComponent(exam.form_url)}', '${exam.exam_token || exam.password || ''}')" class="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 active:scale-95 transition">
+                <button onclick="promptExamToken('${exam.id}', '${encodeURIComponent(exam.subject_name)}', '${encodeURIComponent(exam.form_url)}')" class="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 active:scale-95 transition">
                     Mulai &rarr;
                 </button>
             `}
@@ -172,14 +183,13 @@ async function loadAvailableExams(studentClass) {
     }).join('');
 }
 
-// MEMBUKA MODAL AUTHENTIKASI PASSWORD UJIAN (SESUAI GAMBAR 3)
-function promptExamToken(id, name, formUrl, dbToken) {
+// MEMBUKA MODAL AUTHENTIKASI PASSWORD UJIAN
+function promptExamToken(id, name, formUrl) {
     playSound('click');
     pendingExam = {
         id: id,
         subjectName: decodeURIComponent(name),
-        formUrl: decodeURIComponent(formUrl),
-        dbToken: dbToken // Token yang ditarik dari kolom exam_token / password di Supabase
+        formUrl: decodeURIComponent(formUrl)
     };
 
     document.getElementById('inputExamToken').value = '';
@@ -192,7 +202,7 @@ function closeTokenModal() {
     pendingExam = null;
 }
 
-// VERIFIKASI PASSWORD UJIAN
+// VERIFIKASI PASSWORD UJIAN TERHADAP TABEL app_settings (enter_password)
 document.getElementById('tokenForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     playSound('click');
@@ -200,8 +210,10 @@ document.getElementById('tokenForm')?.addEventListener('submit', async (e) => {
 
     if (!pendingExam) return;
 
-    // Jika password di DB diatur, maka harus cocok persis
-    if (pendingExam.dbToken && pendingExam.dbToken !== "" && inputToken !== pendingExam.dbToken) {
+    // Ambil enter_password dari app_settings
+    const requiredPassword = currentAppSettings?.enter_password || 'sman1jkt';
+
+    if (inputToken !== requiredPassword) {
         showModernAlert("Password ujian yang Anda masukkan salah! Mintalah password resmi kepada proktor/pengawas.", "Password Ujian Salah", "error");
         return;
     }
