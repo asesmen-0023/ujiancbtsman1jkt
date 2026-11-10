@@ -163,7 +163,7 @@ document.getElementById('studentLoginForm')?.addEventListener('submit', async (e
     loadAvailableExams(data.student_class);
 });
 
-// 2. DASHBOARD SOAL UJIAN & DETEKSI TERKUNCI (FIXED ROBUST MATCHING)
+// 2. DASHBOARD SOAL UJIAN
 async function loadAvailableExams(studentClass) {
     const container = document.getElementById('examListContainer');
     if (!container) return;
@@ -182,13 +182,11 @@ async function loadAvailableExams(studentClass) {
         return;
     }
 
-    // Ambil SEMUA riwayat pengerjaan siswa ini
     const { data: history } = await currentClient
         .from('exam_submissions')
         .select('*')
         .eq('nisn', String(loggedInStudent.nisn).trim());
 
-    // Buat set ID yang berstatus is_completed: true (Dikonversi ke String)
     const completedSubjectIds = new Set(
         (history || [])
             .filter(h => h.is_completed === true || String(h.is_completed) === 'true')
@@ -198,7 +196,7 @@ async function loadAvailableExams(studentClass) {
     const userClass = String(studentClass).trim().toLowerCase();
     
     const availableExams = (exams || []).filter(exam => {
-        const examClass = String(exam.student_class || '').trim().toLowerCase();
+        const examClass = String(exam.student_class || exam.target_rombel || '').trim().toLowerCase();
         return examClass === userClass || 
                examClass === 'semua' || 
                userClass.startsWith(examClass) || 
@@ -216,8 +214,8 @@ async function loadAvailableExams(studentClass) {
     container.innerHTML = availableExams.map(exam => {
         const examIdStr = String(exam.id).trim();
         const isFinished = completedSubjectIds.has(examIdStr);
-        const subjectName = exam.subject_name || 'Uji Coba Ujian';
-        const formUrl = exam.form_url || '';
+        const subjectName = exam.subject_name || exam.mata_pelajaran || 'Uji Coba Ujian';
+        const formUrl = exam.form_url || exam.link_form || '';
 
         return `
         <div class="exam-card flex justify-between items-center ${isFinished ? 'opacity-60 bg-slate-50' : ''}">
@@ -249,7 +247,7 @@ async function startExamDirectly(id, name, formUrl) {
 
     iframeLoadCount = 0;
 
-    // Catat data awal pengerjaan (is_completed: false)
+    // Catat data awal pengerjaan ke Supabase
     await currentClient.from('exam_submissions').upsert([{
         nisn: String(loggedInStudent.nisn).trim(),
         student_name: loggedInStudent.nama,
@@ -273,51 +271,68 @@ async function startExamDirectly(id, name, formUrl) {
     requestFullscreenMode();
 }
 
-// 4. OTOMATISASI SUBMIT FORM -> SEKETIKA UPDATE SUPABASE & KUNCI STATUS
+// FUNGSI UTAMA PENYIMPANAN + CATCH ERROR KE POPUP MODERN ALERT (SARAN CLAUDE A)
+async function markExamCompleted() {
+    if (!activeExam || !loggedInStudent || !currentClient) return false;
+
+    const nisn = String(loggedInStudent.nisn).trim();
+    const subjectId = String(activeExam.id).trim();
+
+    const { error } = await currentClient
+        .from('exam_submissions')
+        .upsert([{
+            nisn: nisn,
+            student_name: loggedInStudent.nama,
+            student_class: loggedInStudent.student_class,
+            subject_id: subjectId,
+            is_completed: true,
+            violation_count: violations
+        }], { onConflict: 'nisn,subject_id' });
+
+    if (error) {
+        // Tampilkan pesan error RLS / Constraint langsung di modal alert siswa!
+        showModernAlert('Gagal menyimpan status ke Supabase: ' + error.message, 'Database Error', 'error');
+        return false;
+    }
+    return true;
+}
+
+// MEMINDAHKAN PROSES PENUTUPAN IFRAME & TAMPILKAN POPUP KELUAR (SARAN CLAUDE B)
+function finishExamUI() {
+    playSound('success');
+
+    const iframe = document.getElementById('examIframe');
+    if (iframe) {
+        iframe.onload = null;
+        iframe.src = "";
+    }
+    document.getElementById('examFrameContainer')?.classList.add('hidden');
+
+    if (typeof resetGame === 'function') resetGame();
+    document.getElementById('inputExitPassword').value = '';
+    document.getElementById('exitGameModal')?.classList.remove('hidden');
+}
+
+// 4. OTOMATISASI DETEKSI DETIK IFRAME SUBMIT
 async function handleIframeSubmit() {
     iframeLoadCount++;
 
     if (iframeLoadCount >= 2 && activeExam) {
-        playSound('success');
-
-        const studentNisn = String(loggedInStudent.nisn).trim();
-        const subjectIdStr = String(activeExam.id).trim();
-
-        // 1. Coba UPDATE terlebih dahulu
-        const { data: updateData, error: updateErr } = await currentClient
-            .from('exam_submissions')
-            .update({ 
-                is_completed: true,
-                violation_count: violations 
-            })
-            .eq('nisn', studentNisn)
-            .eq('subject_id', subjectIdStr)
-            .select();
-
-        // 2. Jika UPDATE tidak mengubah baris (misal karena constraint), jalankan UPSERT
-        if (updateErr || !updateData || updateData.length === 0) {
-            await currentClient
-                .from('exam_submissions')
-                .upsert([{
-                    nisn: studentNisn,
-                    student_name: loggedInStudent.nama,
-                    student_class: loggedInStudent.student_class,
-                    subject_id: subjectIdStr,
-                    is_completed: true,
-                    violation_count: violations
-                }], { onConflict: 'nisn,subject_id' });
+        const success = await markExamCompleted();
+        if (success) {
+            finishExamUI();
         }
+    }
+}
 
-        const iframe = document.getElementById('examIframe');
-        if (iframe) {
-            iframe.onload = null;
-            iframe.src = "";
-        }
-        document.getElementById('examFrameContainer')?.classList.add('hidden');
-
-        if (typeof resetGame === 'function') resetGame();
-        document.getElementById('inputExitPassword').value = '';
-        document.getElementById('exitGameModal')?.classList.remove('hidden');
+// BACKUP MANUAL TOMBOL "SAYA SUDAH KIRIM"
+async function confirmFinished() {
+    if (!activeExam) return;
+    if (!confirm('Pastikan Google Form sudah benar-benar terkirim. Lanjutkan keluar?')) return;
+    
+    const success = await markExamCompleted();
+    if (success) {
+        finishExamUI();
     }
 }
 
@@ -336,7 +351,6 @@ document.getElementById('exitPasswordForm')?.addEventListener('submit', async (e
     playSound('success');
     document.getElementById('exitGameModal')?.classList.add('hidden');
     
-    // Refresh otomatis dashboard siswa (Kartu mapel langsung berubah menjadi 🔒 Selesai)
     loadAvailableExams(loggedInStudent.student_class);
     requestFullscreenMode();
 
