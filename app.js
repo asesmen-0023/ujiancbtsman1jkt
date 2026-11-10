@@ -109,9 +109,38 @@ function closeModernAlert() {
 }
 
 // 1. LOGIN SISWA
+// NAVIGATION MULTI-STEP LOGIN
+function goToStep2(angkatan) {
+    playSound('click');
+    const label = SUPABASE_SERVERS[angkatan]?.name || `Kelas ${angkatan}`;
+    
+    document.getElementById('selectedServerLabel').innerText = label;
+    document.getElementById('loginStepSubtitle').innerText = `Langkah 2 dari 2: Autentikasi Siswa (${label})`;
+    
+    document.getElementById('stepSelectAngkatan')?.classList.add('hidden');
+    document.getElementById('stepCredentials')?.classList.remove('hidden');
+}
+
+function goToStep1() {
+    playSound('click');
+    document.getElementById('loginStepSubtitle').innerText = 'Langkah 1 dari 2: Pilih Angkatan Server Ujian';
+    
+    document.getElementById('stepCredentials')?.classList.add('hidden');
+    document.getElementById('stepSelectAngkatan')?.classList.remove('hidden');
+}
+
+// EVENT LISTENER TAHAP 1: PILIH KELAS
+document.getElementById('step1Form')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const angkatan = document.getElementById('serverAngkatan').value;
+    goToStep2(angkatan);
+});
+
+// EVENT LISTENER TAHAP 2: AUTENTIKASI SISWA & LOGIN SUPABASE
 document.getElementById('studentLoginForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     playSound('click');
+    
     const angkatan = document.getElementById('serverAngkatan').value;
     const nisn = document.getElementById('studentNisn').value.trim();
     const pass = document.getElementById('studentPass').value.trim();
@@ -144,7 +173,7 @@ document.getElementById('studentLoginForm')?.addEventListener('submit', async (e
         return;
     }
 
-    // Ambil settings app_settings untuk enter_password
+    // Fetch app_settings untuk enter_password
     const { data: settingsData } = await currentClient
         .from('app_settings')
         .select('*')
