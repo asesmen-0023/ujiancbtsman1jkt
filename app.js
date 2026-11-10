@@ -298,22 +298,71 @@ function requestFullscreenMode() {
     }
 }
 
+// ==========================================
+// LOGIKA KEAMANAN & DETEKSI DISTRAKSI (ANTI FALSE POSITIVE)
+// ==========================================
+
+let isInteractingWithForm = false;
+
+// 1. Deteksi Pindah Tab / Minimalkan Browser
 document.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
+    // Jika browser benar-benar disembunyikan/dipindah tab
+    if (document.hidden && isExamActive) {
         triggerViolationNotice('Dilarang berpindah tab atau meminimalkan browser!');
     }
 });
 
+// 2. Deteksi Kehilangan Fokus (Blur) yang Ditingkatkan
 window.addEventListener('blur', () => {
-    triggerViolationNotice('Dilarang membuka/mengaktifkan aplikasi lain saat ujian!');
+    if (!isExamActive) return;
+
+    // Beri jeda kecil 200ms untuk memvalidasi elemen mana yang sedang diakses siswa
+    setTimeout(() => {
+        const activeElem = document.activeElement;
+        
+        // A. Abaikan jika fokus berada di dalam iFrame (Google Form / input teks / upload file)
+        const isIframeActive = activeElem && activeElem.tagName === 'IFRAME';
+        
+        // B. Abaikan jika siswa sedang berinteraksi dengan elemen input/form internal
+        if (isIframeActive || isInteractingWithForm) {
+            return;
+        }
+
+        // C. Hanya picu pelanggaran jika jendela browser benar-benar kehilangan fokus utama ke aplikasi luar
+        if (!document.hasFocus()) {
+            triggerViolationNotice('Dilarang membuka/mengaktifkan aplikasi lain saat ujian!');
+        }
+    }, 200);
 });
 
+// 3. Deteksi Keluar Mode Layar Penuh (Fullscreen Change)
 const handleFullscreenChange = () => {
     const isFullscreen = document.fullscreenElement || document.webkitFullscreenElement;
+    
+    // Jika keluar fullscreen saat ujian berlangsung
     if (!isFullscreen && isExamActive) {
-        triggerViolationNotice('Layar ujian wajib dalam mode layar penuh (Fullscreen)!');
+        // Beri jeda singkat memastikan bukan karena rotasi layar perangkat
+        setTimeout(() => {
+            const currentFullscreen = document.fullscreenElement || document.webkitFullscreenElement;
+            if (!currentFullscreen && isExamActive) {
+                triggerViolationNotice('Layar ujian wajib dalam mode layar penuh (Fullscreen)!');
+            }
+        }, 300);
     }
 };
 
 document.addEventListener('fullscreenchange', handleFullscreenChange);
 document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+
+// 4. Mencegah Klik Kanan & Shortcut Keyboard Pengganggu di Luar iFrame
+document.addEventListener('keydown', (e) => {
+    // Blokir F12, Ctrl+Shift+I, Ctrl+U (Developer Tools & View Source)
+    if (
+        e.key === 'F12' || 
+        (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'i' || e.key === 'J' || e.key === 'j')) ||
+        (e.ctrlKey && (e.key === 'u' || e.key === 'U'))
+    ) {
+        e.preventDefault();
+        return false;
+    }
+});
