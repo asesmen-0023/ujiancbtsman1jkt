@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CBT SMAN 1 Jakarta - Secure Exam</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 font-sans select-none" oncontextmenu="return false;">
+
+    <!-- MODAL LOGIN SISWA -->
+    <div id="studentLoginModal" class="fixed inset-0 bg-slate-950 flex items-center justify-center p-4 z-50">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-8 w-full max-w-md">
+            <h2 class="text-2xl font-black text-white mb-1">Ujian Online (iOS / SEB)</h2>
+            <p class="text-xs text-slate-400 mb-6">SMAN 1 Jakarta</p>
+            
+            <form id="studentLoginForm" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 mb-1">Pilih Angkatan / Server</label>
+                    <select id="serverAngkatan" class="w-full bg-slate-800 border border-slate-700 p-3 rounded-xl text-sm font-bold text-white outline-none">
+                        <option value="X">Kelas X</option>
+                        <option value="XI">Kelas XI</option>
+                        <option value="XII">Kelas XII</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 mb-1">NISN Siswa</label>
+                    <input type="text" id="studentNisn" class="w-full bg-slate-800 border border-slate-700 p-3 rounded-xl text-sm text-white outline-none" placeholder="Masukkan NISN Anda" required>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 mb-1">Password Ujian</label>
+                    <input type="password" id="studentPass" class="w-full bg-slate-800 border border-slate-700 p-3 rounded-xl text-sm text-white outline-none" placeholder="Masukkan password" required>
+                </div>
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold p-3 rounded-xl transition">Mulai Ujian</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- HALAMAN UTAMA UJIAN (SETELAH LOGIN) -->
+    <div id="examApp" class="hidden min-h-screen flex flex-col">
+        <header class="bg-slate-800 border-b border-slate-700 p-4 flex justify-between items-center">
+            <div>
+                <h1 id="lblStudentName" class="font-bold text-sm text-white">-</h1>
+                <p id="lblStudentClass" class="text-xs text-slate-400">-</p>
+            </div>
+            <button onclick="logoutExam()" class="bg-rose-600 hover:bg-rose-700 text-xs font-bold px-4 py-2 rounded-lg transition">Keluar Ujian</button>
+        </header>
+
+        <main class="flex-1 p-4 max-w-5xl mx-auto w-full">
+            <h2 class="text-lg font-bold mb-4">Daftar Soal Ujian Tersedia</h2>
+            <div id="examListContainer" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- List soal dari Supabase akan dirender di sini -->
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Konfigurasi 3 URL & Kunci Supabase Anda (Persis seperti yang di Android)
+        const SUPABASE_CONFIGS = {
+            'X': { url: 'https://ulroqkrnwzzrgkasrqit.supabase.co', key: 'sb_publishable_DJm-HRJpia9X3CzOlBq61Q_Dqct-DPi' },
+            'XI': { url: 'URL_SUPABASE_KELAS_XI', key: 'KEY_SUPABASE_KELAS_XI' },
+            'XII': { url: 'URL_SUPABASE_KELAS_XII', key: 'KEY_SUPABASE_KELAS_XII' }
+        };
+
+        let currentClient = null;
+        let loggedInStudent = null;
+
+        document.getElementById('studentLoginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const angkatan = document.getElementById('serverAngkatan').value;
+            const nisn = document.getElementById('studentNisn').value.trim();
+            const pass = document.getElementById('studentPass').value.trim();
+
+            const config = SUPABASE_CONFIGS[angkatan];
+            currentClient = supabase.createClient(config.url, config.key);
+
+            // Cek data siswa ke tabel 'students'
+            const { data, error } = await currentClient
+                .from('students')
+                .select('*')
+                .eq('nisn', nisn)
+                .maybeSingle();
+
+            if (error || !data) {
+                alert('NISN tidak ditemukan di database server ini!');
+                return;
+            }
+
+            // Validasi password (default password adalah NISN jika kolom password kosong)
+            const validPassword = data.password ? data.password : data.nisn;
+            if (pass !== validPassword) {
+                alert('Password salah!');
+                return;
+            }
+
+            loggedInStudent = data;
+            
+            // Tampilkan UI Ujian & Sembunyikan Login
+            document.getElementById('studentLoginModal').classList.add('hidden');
+            document.getElementById('examApp').classList.remove('hidden');
+            document.getElementById('lblStudentName').innerText = data.nama;
+            document.getElementById('lblStudentClass').innerText = `Kelas: ${data.student_class} | NISN: ${data.nisn}`;
+
+            loadAvailableExams(data.student_class);
+        });
+
+        async function loadAvailableExams(studentClass) {
+            const { data, error } = await currentClient
+                .from('exams')
+                .select('*')
+                .eq('is_active', true);
+
+            const container = document.getElementById('examListContainer');
+            if (error || !data || data.length === 0) {
+                container.innerHTML = `<p class="text-slate-400">Belum ada soal ujian aktif saat ini.</p>`;
+                return;
+            }
+
+            container.innerHTML = data.map(exam => `
+                <div class="bg-slate-800 border border-slate-700 p-5 rounded-xl flex flex-col justify-between">
+                    <div>
+                        <span class="bg-blue-900 text-blue-200 text-[10px] font-bold px-2.5 py-1 rounded-full">${exam.student_class}</span>
+                        <h3 class="font-bold text-white text-base mt-2">${exam.subject_name}</h3>
+                    </div>
+                    <button onclick="startExam('${exam.form_url}', '${exam.id}')" class="mt-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg text-sm transition">
+                        Kerjakan Soal
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        function startExam(url, examId) {
+            // Catat ke exam_submissions bahwa siswa mulai mengerjakan
+            currentClient.from('exam_submissions').insert([{
+                nisn: loggedInStudent.nisn,
+                student_name: loggedInStudent.nama,
+                student_class: loggedInStudent.student_class,
+                subject_id: examId,
+                is_completed: false
+            }]).then(() => {
+                window.location.href = url; // Buka Google Form / link soal
+            });
+        }
+
+        function logoutExam() {
+            location.reload();
+        }
+
+        // Skrip Deteksi Pelanggaran Sederhana (Anti-Kecurangan Web)
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden && loggedInStudent) {
+                alert('PPERINGATAN: Anda terdeteksi keluar dari jendela ujian!');
+                // Opsional: Catat log pelanggaran ke tabel 'violations' di Supabase
+            }
+        });
+    </script>
+</body>
+</html>
