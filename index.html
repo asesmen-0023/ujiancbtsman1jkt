@@ -34,7 +34,7 @@
             </div>
             <h3 class="text-base font-bold text-slate-900 mb-1">Terdeteksi Pelanggaran!</h3>
             <p id="violationReason" class="text-xs text-slate-600 leading-relaxed mb-4">
-                Anda terdeteksi meninggalkan halaman ujian.
+                Anda terdeteksi meninggalkan halaman ujian atau keluar dari layar penuh.
             </p>
             <div class="bg-slate-100 p-2.5 rounded-xl text-xs font-mono text-slate-700 mb-5">
                 Jumlah Pelanggaran: <span id="violationCount" class="font-bold text-rose-600 text-sm">0</span> kali
@@ -45,7 +45,7 @@
         </div>
     </div>
 
-    <!-- MODAL AUTENTIKASI PASSWORD UJIAN (MASUK MAPEL) -->
+    <!-- MODAL AUTENTIKASI ENTER PASSWORD UJIAN -->
     <div id="tokenModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-[9000]">
         <div class="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm text-left">
             <h3 class="text-base font-bold text-slate-900 mb-1">Autentikasi Ujian</h3>
@@ -68,40 +68,40 @@
         </div>
     </div>
 
-    <!-- MODAL PERMAINAN & VERIFIKASI PASSWORD KELUAR UJIAN -->
-    <div id="exitGameModal" class="fixed inset-0 bg-black/75 backdrop-blur-md hidden flex items-center justify-center p-4 z-[9000]">
-        <div class="bg-white rounded-3xl p-6 w-full max-w-sm text-center shadow-2xl border border-slate-100">
-            <div class="inline-block bg-emerald-100 text-emerald-600 px-3 py-1 rounded-full text-[11px] font-bold mb-2">
-                ✅ Google Form Terkirim!
-            </div>
-            <h3 class="text-base font-bold text-slate-800 mb-1">🎮 Terima Kasih</h3>
-            <p class="text-xs text-slate-500 mb-4">Silakan menunggu pengawas memberikan Password Keluar Ujian.</p>
-
-            <!-- BOARD TIC TAC TOE -->
-            <div id="gameBoard" class="grid grid-cols-3 gap-2 bg-slate-100 p-3 rounded-2xl mx-auto w-fit mb-3">
-                <div class="cell bg-white rounded-xl text-slate-800 border border-slate-200 shadow-sm" onclick="makeMove(0)"></div>
-                <div class="cell bg-white rounded-xl text-slate-800 border border-slate-200 shadow-sm" onclick="makeMove(1)"></div>
-                <div class="cell bg-white rounded-xl text-slate-800 border border-slate-200 shadow-sm" onclick="makeMove(2)"></div>
-                <div class="cell bg-white rounded-xl text-slate-800 border border-slate-200 shadow-sm" onclick="makeMove(3)"></div>
-                <div class="cell bg-white rounded-xl text-slate-800 border border-slate-200 shadow-sm" onclick="makeMove(4)"></div>
-                <div class="cell bg-white rounded-xl text-slate-800 border border-slate-200 shadow-sm" onclick="makeMove(5)"></div>
-                <div class="cell bg-white rounded-xl text-slate-800 border border-slate-200 shadow-sm" onclick="makeMove(6)"></div>
-                <div class="cell bg-white rounded-xl text-slate-800 border border-slate-200 shadow-sm" onclick="makeMove(7)"></div>
-                <div class="cell bg-white rounded-xl text-slate-800 border border-slate-200 shadow-sm" onclick="makeMove(8)"></div>
+    <!-- MODAL PERMAINAN LAYAR PENUH (FULLSCREEN STANDBY) -->
+    <div id="exitGameModal" class="fixed inset-0 bg-slate-900 hidden flex flex-col justify-center items-center p-4 z-[9000] w-full h-full overflow-hidden">
+        <div class="w-full max-w-md bg-white rounded-3xl p-6 sm:p-8 text-center shadow-2xl border border-slate-100 flex flex-col items-center my-auto">
+            
+            <div class="inline-flex items-center gap-1.5 bg-emerald-100 text-emerald-700 px-4 py-1.5 rounded-full text-xs font-bold mb-3 shadow-sm">
+                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                Jawaban Google Form Terkirim!
             </div>
 
-            <p id="gameStatus" class="text-xs font-bold text-blue-600 mb-4">Giliran Pemain: X</p>
-            <button onclick="resetGame()" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-1.5 rounded-xl text-xs mb-4">Reset Papan Game</button>
+            <h2 class="text-xl font-black text-slate-900 mb-1">🎮 Ujian Selesai</h2>
+            <p class="text-xs text-slate-500 mb-6 max-w-xs leading-relaxed">
+                Status ujian Anda telah terkunci di database. Silakan bermain sambil menunggu pengawas mengakhiri sesi di aplikasi SEB.
+            </p>
 
-            <!-- FORM INPUT PASSWORD KELUAR PROKTOR -->
-            <form id="exitPasswordForm" class="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-left space-y-3">
-                <label class="block text-xs font-bold text-slate-700">Password Keluar</label>
-                <input type="password" id="inputExitPassword" class="w-full bg-white border border-slate-300 p-2.5 rounded-xl text-xs font-mono text-slate-800 outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Masukkan password exit" required>
-                <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl text-xs transition shadow-md">
-                    KELUAR UJIAN
-                </button>
-            </form>
+            <div id="gameBoard" class="grid grid-cols-3 gap-3 bg-slate-100 p-4 rounded-3xl mx-auto w-fit shadow-inner mb-4">
+                <div class="cell bg-white rounded-2xl text-slate-800 border border-slate-200 shadow-sm transition active:scale-95" onclick="makeMove(0)"></div>
+                <div class="cell bg-white rounded-2xl text-slate-800 border border-slate-200 shadow-sm transition active:scale-95" onclick="makeMove(1)"></div>
+                <div class="cell bg-white rounded-2xl text-slate-800 border border-slate-200 shadow-sm transition active:scale-95" onclick="makeMove(2)"></div>
+                <div class="cell bg-white rounded-2xl text-slate-800 border border-slate-200 shadow-sm transition active:scale-95" onclick="makeMove(3)"></div>
+                <div class="cell bg-white rounded-2xl text-slate-800 border border-slate-200 shadow-sm transition active:scale-95" onclick="makeMove(4)"></div>
+                <div class="cell bg-white rounded-2xl text-slate-800 border border-slate-200 shadow-sm transition active:scale-95" onclick="makeMove(5)"></div>
+                <div class="cell bg-white rounded-2xl text-slate-800 border border-slate-200 shadow-sm transition active:scale-95" onclick="makeMove(6)"></div>
+                <div class="cell bg-white rounded-2xl text-slate-800 border border-slate-200 shadow-sm transition active:scale-95" onclick="makeMove(7)"></div>
+                <div class="cell bg-white rounded-2xl text-slate-800 border border-slate-200 shadow-sm transition active:scale-95" onclick="makeMove(8)"></div>
+            </div>
+
+            <p id="gameStatus" class="text-sm font-extrabold text-blue-600 mb-5">Giliran Pemain: X</p>
+            
+            <button onclick="resetGame()" class="w-full max-w-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-2xl text-xs transition shadow-sm border border-slate-200 active:scale-95">
+                🔄 Reset Papan Game
+            </button>
         </div>
+
+        <p class="text-[11px] text-slate-400 font-medium mt-4">CBT SMAN 1 Jakarta • Standby Mode</p>
     </div>
 
     <!-- TAHAP 1: HALAMAN LOGIN SISWA -->
@@ -158,29 +158,26 @@
 
         <main class="flex-1 p-4 max-w-md mx-auto w-full">
             <h2 class="text-xs font-bold text-slate-700 mb-3 uppercase tracking-wider">Pilih Ujian Hari Ini</h2>
-            <div id="examListContainer" class="space-y-3">
-                <!-- List soal bentuk Card Putih akan dirender di sini -->
-            </div>
+            <div id="examListContainer" class="space-y-3"></div>
         </main>
     </div>
 
     <!-- TAHAP 3: EMBEDDED GOOGLE FORM UJIAN -->
-<div id="examFrameContainer" class="hidden fixed inset-0 bg-slate-900 z-50 flex flex-col w-full h-full">
-    <header class="bg-blue-600 text-white p-3 flex justify-between items-center h-14 shrink-0 shadow-md">
-        <div class="flex items-center space-x-2">
-            <span id="activeExamTitle" class="font-bold text-xs flex items-center gap-2">
-                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Mode Ujian
-            </span>
+    <div id="examFrameContainer" class="hidden fixed inset-0 bg-slate-900 z-50 flex flex-col w-full h-full">
+        <header class="bg-blue-600 text-white p-3 flex justify-between items-center h-14 shrink-0 shadow-md">
+            <div class="flex items-center space-x-2">
+                <span id="activeExamTitle" class="font-bold text-xs flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Mode Ujian
+                </span>
+            </div>
+            <button onclick="confirmFinished()" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition shadow border border-emerald-400">
+                ✅ Saya Sudah Kirim
+            </button>
+        </header>
+        <div class="flex-1 w-full h-full relative bg-white">
+            <iframe id="examIframe" class="w-full h-full border-0" src="" allowfullscreen></iframe>
         </div>
-        <!-- TOMBOL BACKUP UNTUK SISWA MENGKONFIRMASI PENYELESAIAN -->
-        <button onclick="confirmFinished()" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition shadow border border-emerald-400">
-            ✅ Saya Sudah Kirim
-        </button>
-    </header>
-    <div class="flex-1 w-full h-full relative bg-white">
-        <iframe id="examIframe" class="w-full h-full border-0" src="" allowfullscreen></iframe>
     </div>
-</div>
 
     <script src="game.js"></script>
     <script src="app.js"></script>
