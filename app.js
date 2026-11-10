@@ -21,9 +21,9 @@ let currentClient = null;
 let loggedInStudent = null;
 let violations = 0;
 let isExamActive = false;
-let pendingExam = null;
+let activeExam = null;
 let currentAppSettings = null;
-let iframeLoadCount = 0; // Penanda untuk mendeteksi submit form
+let iframeLoadCount = 0;
 
 // Web Audio Synthesizer
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -53,11 +53,10 @@ function playSound(type) {
         osc.start();
         osc.stop(audioCtx.currentTime + 0.08);
     } else if (type === 'success') {
-        // Nada Efek Berhasil Submit GForm (Melodi Sukses)
         osc.type = 'triangle';
-        osc.frequency.setValueAtTime(523.25, audioCtx.currentTime); // C5
-        osc.frequency.setValueAtTime(659.25, audioCtx.currentTime + 0.15); // E5
-        osc.frequency.setValueAtTime(783.99, audioCtx.currentTime + 0.3); // G5
+        osc.frequency.setValueAtTime(523.25, audioCtx.currentTime);
+        osc.frequency.setValueAtTime(659.25, audioCtx.currentTime + 0.15);
+        osc.frequency.setValueAtTime(783.99, audioCtx.currentTime + 0.3);
         gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.6);
         osc.start();
@@ -81,7 +80,7 @@ function closeModernAlert() {
     document.getElementById('modernAlertModal')?.classList.add('hidden');
 }
 
-// LOGIN SISWA
+// 1. HALAMAN LOGIN SISWA
 document.getElementById('studentLoginForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     playSound('click');
@@ -117,7 +116,7 @@ document.getElementById('studentLoginForm')?.addEventListener('submit', async (e
         return;
     }
 
-    // Ambil setting enter_password
+    // Ambil settings app_settings untuk exit_password
     const { data: settingsData } = await currentClient
         .from('app_settings')
         .select('*')
@@ -137,7 +136,7 @@ document.getElementById('studentLoginForm')?.addEventListener('submit', async (e
     loadAvailableExams(data.student_class);
 });
 
-// LOAD DAFTAR SOAL & CEK STATUS TERKUNCI
+// 2. DASHBOARD SOAL UJIAN
 async function loadAvailableExams(studentClass) {
     const { data: exams, error } = await currentClient
         .from('exams')
@@ -176,7 +175,7 @@ async function loadAvailableExams(studentClass) {
                     🔒 Selesai
                 </span>
             ` : `
-                <button onclick="promptExamToken('${exam.id}', '${encodeURIComponent(exam.subject_name)}', '${encodeURIComponent(exam.form_url)}')" class="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 active:scale-95 transition">
+                <button onclick="startExamDirectly('${exam.id}', '${encodeURIComponent(exam.subject_name)}', '${encodeURIComponent(exam.form_url)}')" class="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 active:scale-95 transition">
                     Mulai &rarr;
                 </button>
             `}
@@ -184,43 +183,15 @@ async function loadAvailableExams(studentClass) {
     }).join('');
 }
 
-function promptExamToken(id, name, formUrl) {
+// 3. MULAI LANGSUNG MASUK KE GOOGLE FORM
+async function startExamDirectly(id, name, formUrl) {
     playSound('click');
-    pendingExam = {
+    activeExam = {
         id: id,
         subjectName: decodeURIComponent(name),
         formUrl: decodeURIComponent(formUrl)
     };
 
-    document.getElementById('inputExamToken').value = '';
-    document.getElementById('tokenModal').classList.remove('hidden');
-}
-
-function closeTokenModal() {
-    playSound('click');
-    document.getElementById('tokenModal').classList.add('hidden');
-    pendingExam = null;
-}
-
-// VERIFIKASI PASSWORD UJIAN TERHADAP TABEL app_settings (enter_password)
-document.getElementById('tokenForm')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    playSound('click');
-    const inputToken = document.getElementById('inputExamToken').value.trim();
-
-    if (!pendingExam) return;
-
-    const requiredPassword = currentAppSettings?.enter_password || 'sman1jkt';
-
-    if (inputToken !== requiredPassword) {
-        showModernAlert("Password ujian yang Anda masukkan salah! Mintalah password resmi kepada proktor/pengawas.", "Password Ujian Salah", "error");
-        return;
-    }
-
-    const examToStart = pendingExam;
-    closeTokenModal();
-
-    // Reset hitungan reload iframe
     iframeLoadCount = 0;
 
     // Record pengerjaan awal di Supabase
@@ -228,7 +199,7 @@ document.getElementById('tokenForm')?.addEventListener('submit', async (e) => {
         nisn: loggedInStudent.nisn,
         student_name: loggedInStudent.nama,
         student_class: loggedInStudent.student_class,
-        subject_id: examToStart.id,
+        subject_id: activeExam.id,
         is_completed: false
     }], { onConflict: 'nisn,subject_id' });
 
@@ -237,29 +208,54 @@ document.getElementById('tokenForm')?.addEventListener('submit', async (e) => {
     const activeTitle = document.getElementById('activeExamTitle');
 
     if (iframe) {
-        iframe.src = examToStart.formUrl;
-        
-        // PASANG EVENT LISTENER ONLOAD UNTUK DETEKSI OTOMATIS SUBMIT GFORM
-        iframe.onload = handleIframeLoad;
+        iframe.src = activeExam.formUrl;
+        iframe.onload = handleIframeSubmit;
     }
 
-    if (activeTitle) activeTitle.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Ujian: ${examToStart.subjectName}`;
+    if (activeTitle) activeTitle.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Ujian: ${activeExam.subjectName}`;
     
     frameContainer?.classList.remove('hidden');
     requestFullscreenMode();
-});
+}
 
-// LOGIKA OTOMATIS SAAT GOOGLE FORM TERKIRIM
-async function handleIframeLoad() {
+// 4. SAAT FORM TERKIRIM -> BUKA HALAMAN PERMAINAN & PASSWORD KELUAR
+function handleIframeSubmit() {
     iframeLoadCount++;
 
-    // Load pertama = memuat soal Google Form
-    // Load kedua = Google Form telah disubmit / dikirim siswa!
-    if (iframeLoadCount >= 2 && pendingExam) {
-        // 1. Bunyikan efek suara sukses!
+    // Load ke-2 menandakan Google Form disubmit
+    if (iframeLoadCount >= 2 && activeExam) {
         playSound('success');
 
-        // 2. Simpan status is_completed = true ke Supabase
+        const iframe = document.getElementById('examIframe');
+        if (iframe) {
+            iframe.onload = null;
+            iframe.src = "";
+        }
+        document.getElementById('examFrameContainer')?.classList.add('hidden');
+
+        // Buka Modal Permainan & Verifikasi Password Keluar
+        if (typeof resetGame === 'function') resetGame();
+        document.getElementById('inputExitPassword').value = '';
+        document.getElementById('exitGameModal')?.classList.remove('hidden');
+    }
+}
+
+// 5. VERIFIKASI PASSWORD KELUAR & SIMPAN KE SUPABASE
+document.getElementById('exitPasswordForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    playSound('click');
+    const exitPassInput = document.getElementById('inputExitPassword').value.trim();
+
+    // Ambil exit_password dari app_settings
+    const requiredExitPassword = currentAppSettings?.exit_password || 'sman1jkt2';
+
+    if (exitPassInput !== requiredExitPassword) {
+        showModernAlert("Password Keluar Ujian yang Anda masukkan salah! Mintalah password exit resmi kepada pengawas kelas.", "Password Exit Salah", "error");
+        return;
+    }
+
+    // Jika password benar, update status is_completed = true ke Supabase
+    if (activeExam?.id && currentClient) {
         await currentClient
             .from('exam_submissions')
             .update({ 
@@ -267,40 +263,18 @@ async function handleIframeLoad() {
                 violation_count: violations 
             })
             .eq('nisn', loggedInStudent.nisn)
-            .eq('subject_id', pendingExam.id);
-
-        // 3. Tutup iframe & bersihkan state
-        const iframe = document.getElementById('examIframe');
-        if (iframe) {
-            iframe.onload = null;
-            iframe.src = "";
-        }
-        document.getElementById('examFrameContainer')?.classList.add('hidden');
-
-        // 4. Perbarui UI dashboard agar soal langsung TERKUNCI
-        loadAvailableExams(loggedInStudent.student_class);
-        requestFullscreenMode();
-
-        // 5. Tampilkan notifikasi sukses
-        showModernAlert("Jawaban Google Form berhasil terkirim! Status ujian Anda telah otomatis terkunci di database.", "Ujian Berhasil Dikirim", "success");
-        pendingExam = null;
+            .eq('subject_id', activeExam.id);
     }
-}
 
-// Tombol Batal Keluar Darurat (Jika siswa membatalkan sebelum submit)
-function cancelExamFrame() {
-    playSound('click');
-    if (confirm("Apakah Anda yakin ingin keluar dari ujian ini? Jawaban yang belum dikirim ke Google Form mungkin tidak tersimpan.")) {
-        const iframe = document.getElementById('examIframe');
-        if (iframe) {
-            iframe.onload = null;
-            iframe.src = "";
-        }
-        document.getElementById('examFrameContainer')?.classList.add('hidden');
-        requestFullscreenMode();
-        pendingExam = null;
-    }
-}
+    playSound('success');
+    document.getElementById('exitGameModal')?.classList.add('hidden');
+    
+    loadAvailableExams(loggedInStudent.student_class);
+    requestFullscreenMode();
+
+    showModernAlert("Ujian telah sukses diverifikasi pengawas dan status otomatis terkunci di database.", "Ujian Selesai", "success");
+    activeExam = null;
+});
 
 function logoutExam() {
     playSound('click');
@@ -308,7 +282,7 @@ function logoutExam() {
     location.reload();
 }
 
-// LOGIKA KEAMANAN DISTRAKSI (ANTI FALSE POSITIVE)
+// LOGIKA KEAMANAN DISTRAKSI
 let isInteractingWithForm = false;
 
 document.addEventListener('visibilitychange', () => {
