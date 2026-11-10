@@ -16,20 +16,24 @@ body {
     transition: all 0.2s ease;
 }
 
-.exam-card:hover {
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
-}
-
 .cell {
-    width: 56px;
-    height: 56px;
+    width: 76px;
+    height: 76px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.4rem;
-    font-weight: 800;
+    font-size: 2rem;
+    font-weight: 900;
     cursor: pointer;
-    transition: all 0.15s ease-in-out;
+    user-select: none;
+}
+
+@media (min-width: 640px) {
+    .cell {
+        width: 88px;
+        height: 88px;
+        font-size: 2.4rem;
+    }
 }
 
 .cell:hover {
