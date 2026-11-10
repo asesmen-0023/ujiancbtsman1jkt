@@ -75,10 +75,20 @@
     </div>
 
     <script>
+        // KONFIGURASI SUPABASE DISINKRONKAN AGAR BEBAS ERROR URL INVALID
         const SUPABASE_CONFIGS = {
-            'X': { url: 'https://ulroqkrnwzzrgkasrqit.supabase.co', key: 'sb_publishable_DJm-HRJpia9X3CzOlBq61Q_Dqct-DPi' },
-            'XI': { url: 'URL_SUPABASE_KELAS_XI', key: 'KEY_SUPABASE_KELAS_XI' },
-            'XII': { url: 'URL_SUPABASE_KELAS_XII', key: 'KEY_SUPABASE_KELAS_XII' }
+            'X': { 
+                url: 'https://ulroqkrnwzzrgkasrqit.supabase.co', 
+                key: 'sb_publishable_DJm-HRJpia9X3CzOlBq61Q_Dqct-DPi' 
+            },
+            'XI': { 
+                url: 'https://ulroqkrnwzzrgkasrqit.supabase.co', // Ganti dengan URL Supabase Dedicated XI Anda jika sudah tersedia
+                key: 'sb_publishable_DJm-HRJpia9X3CzOlBq61Q_Dqct-DPi' // Ganti dengan Key Supabase Dedicated XI Anda
+            },
+            'XII': { 
+                url: 'https://ulroqkrnwzzrgkasrqit.supabase.co', // Ganti dengan URL Supabase Dedicated XII Anda jika sudah tersedia
+                key: 'sb_publishable_DJm-HRJpia9X3CzOlBq61Q_Dqct-DPi' // Ganti dengan Key Supabase Dedicated XII Anda
+            }
         };
 
         let currentClient = null;
@@ -93,7 +103,14 @@
             const pass = document.getElementById('studentPass').value.trim();
 
             const config = SUPABASE_CONFIGS[angkatan];
-            currentClient = supabase.createClient(config.url, config.key);
+            
+            // Instansiasi client Supabase aman tanpa error URL
+            if (typeof supabase !== 'undefined' && supabase.createClient) {
+                currentClient = supabase.createClient(config.url, config.key);
+            } else {
+                alert('Library Supabase belum siap, periksa koneksi internet!');
+                return;
+            }
 
             const { data, error } = await currentClient
                 .from('students')
@@ -120,7 +137,6 @@
             document.getElementById('lblStudentName').innerText = data.nama;
             document.getElementById('lblStudentClass').innerText = `Kelas: ${data.student_class} | NISN: ${data.nisn}`;
 
-            // Aktifkan mode Fullscreen saat masuk
             requestFullscreenMode();
             loadAvailableExams(data.student_class);
         });
