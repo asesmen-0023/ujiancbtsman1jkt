@@ -24,6 +24,7 @@ let isExamActive = false;
 let activeExam = null;
 let currentAppSettings = null;
 let iframeLoadCount = 0;
+let isInteractingWithForm = false;
 
 // Web Audio Synthesizer
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -64,6 +65,34 @@ function playSound(type) {
     }
 }
 
+// FUNGSI UTILITY DILETAKKAN DI ATAS AGAR TIDAK CAUSE REFERENCE ERROR
+function requestFullscreenMode() {
+    const elem = document.documentElement;
+    if (elem.requestFullscreen) {
+        elem.requestFullscreen().catch(() => {});
+    } else if (elem.webkitRequestFullscreen) {
+        elem.webkitRequestFullscreen();
+    }
+}
+
+function triggerViolationNotice(reason) {
+    if (!isExamActive) return;
+
+    playSound('alarm');
+    violations++;
+    const vReason = document.getElementById('violationReason');
+    const vCount = document.getElementById('violationCount');
+    if (vReason) vReason.innerText = reason;
+    if (vCount) vCount.innerText = violations;
+    document.getElementById('violationModal')?.classList.remove('hidden');
+}
+
+function resumeExam() {
+    playSound('click');
+    document.getElementById('violationModal')?.classList.add('hidden');
+    requestFullscreenMode();
+}
+
 function showModernAlert(message, title = 'Akses Ditolak', type = 'error') {
     playSound(type === 'success' ? 'success' : 'alarm');
     const modal = document.getElementById('modernAlertModal');
@@ -80,7 +109,7 @@ function closeModernAlert() {
     document.getElementById('modernAlertModal')?.classList.add('hidden');
 }
 
-// 1. HALAMAN LOGIN SISWA
+// 1. LOGIN SISWA
 document.getElementById('studentLoginForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     playSound('click');
@@ -137,19 +166,18 @@ document.getElementById('studentLoginForm')?.addEventListener('submit', async (e
 });
 
 // 2. DASHBOARD SOAL UJIAN
-// LOAD DAFTAR SOAL (DISINKRONKAN SESUAI TABEL SUPABASE EXAMS & SUBMISSIONS)
 async function loadAvailableExams(studentClass) {
     const container = document.getElementById('examListContainer');
     if (!container) return;
 
-    // 1. Ambil semua soal dari tabel exams yang is_active = true
-    const { data: exams, error: examError } = await currentClient
+    // Ambil semua soal aktif
+    const { data: exams, error } = await currentClient
         .from('exams')
         .select('*')
         .eq('is_active', true);
 
-    if (examError) {
-        console.error("Error fetching exams:", examError);
+    if (error) {
+        console.error("Error fetching exams:", error);
         container.innerHTML = `
             <div class="bg-white border border-slate-200 p-6 rounded-2xl text-center shadow-sm">
                 <p class="text-rose-500 text-xs font-semibold">Gagal mengambil data ujian dari database server.</p>
@@ -157,23 +185,18 @@ async function loadAvailableExams(studentClass) {
         return;
     }
 
-    // 2. Ambil hanya ujian yang SUDAH SELESAI (is_completed = true) untuk siswa ini
+    // Ambil riwayat pengerjaan yang SUDAH SELESAI
     const { data: history } = await currentClient
         .from('exam_submissions')
         .select('subject_id')
         .eq('nisn', loggedInStudent.nisn)
         .eq('is_completed', true);
 
-    // Konversi subject_id ke String agar pencocokan presisi
     const completedSubjectIds = (history || []).map(h => String(h.subject_id));
-
-    // 3. Filter Soal Berdasarkan Kelas Siswa (student_class)
     const userClass = String(studentClass).trim().toLowerCase();
     
     const availableExams = (exams || []).filter(exam => {
         const examClass = String(exam.student_class || '').trim().toLowerCase();
-        
-        // Tampilkan jika kelas cocok (misal 'xi-1' === 'xi-1') atau bernilai umum ('semua' / 'xi')
         return examClass === userClass || 
                examClass === 'semua' || 
                userClass.startsWith(examClass) || 
@@ -183,15 +206,13 @@ async function loadAvailableExams(studentClass) {
     if (availableExams.length === 0) {
         container.innerHTML = `
             <div class="bg-white border border-slate-200 p-6 rounded-2xl text-center shadow-sm">
-                <p class="text-slate-500 text-xs font-semibold">Belum ada ujian aktif yang ditargetkan untuk kelas ${studentClass}.</p>
+                <p class="text-slate-500 text-xs font-semibold">Belum ada kelas ujian aktif yang ditargetkan untuk kelas ${studentClass}.</p>
             </div>`;
         return;
     }
 
-    // 4. Render Kartu Soal ke Tampilan Siswa
     container.innerHTML = availableExams.map(exam => {
-        const examIdStr = String(exam.id);
-        const isFinished = completedSubjectIds.includes(examIdStr);
+        const isFinished = completedSubjectIds.includes(String(exam.id));
         const subjectName = exam.subject_name || 'Uji Coba Ujian';
         const formUrl = exam.form_url || '';
 
@@ -213,7 +234,8 @@ async function loadAvailableExams(studentClass) {
         </div>`;
     }).join('');
 }
-// 3. MULAI LANGSUNG MASUK KE GOOGLE FORM
+
+// 3. MULAI UJIAN
 async function startExamDirectly(id, name, formUrl) {
     playSound('click');
     activeExam = {
@@ -224,7 +246,6 @@ async function startExamDirectly(id, name, formUrl) {
 
     iframeLoadCount = 0;
 
-    // Record pengerjaan awal di Supabase
     await currentClient.from('exam_submissions').upsert([{
         nisn: loggedInStudent.nisn,
         student_name: loggedInStudent.nama,
@@ -248,11 +269,10 @@ async function startExamDirectly(id, name, formUrl) {
     requestFullscreenMode();
 }
 
-// 4. SAAT FORM TERKIRIM -> BUKA HALAMAN PERMAINAN & PASSWORD KELUAR
+// 4. OTOMATISASI SUBMIT FORM
 function handleIframeSubmit() {
     iframeLoadCount++;
 
-    // Load ke-2 menandakan Google Form disubmit
     if (iframeLoadCount >= 2 && activeExam) {
         playSound('success');
 
@@ -263,20 +283,17 @@ function handleIframeSubmit() {
         }
         document.getElementById('examFrameContainer')?.classList.add('hidden');
 
-        // Buka Modal Permainan & Verifikasi Password Keluar
         if (typeof resetGame === 'function') resetGame();
         document.getElementById('inputExitPassword').value = '';
         document.getElementById('exitGameModal')?.classList.remove('hidden');
     }
 }
 
-// 5. VERIFIKASI PASSWORD KELUAR & SIMPAN KE SUPABASE
+// 5. VERIFIKASI EXIT PASSWORD
 document.getElementById('exitPasswordForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     playSound('click');
     const exitPassInput = document.getElementById('inputExitPassword').value.trim();
-
-    // Ambil exit_password dari app_settings
     const requiredExitPassword = currentAppSettings?.exit_password || 'sman1jkt2';
 
     if (exitPassInput !== requiredExitPassword) {
@@ -284,7 +301,6 @@ document.getElementById('exitPasswordForm')?.addEventListener('submit', async (e
         return;
     }
 
-    // Jika password benar, update status is_completed = true ke Supabase
     if (activeExam?.id && currentClient) {
         await currentClient
             .from('exam_submissions')
@@ -312,9 +328,7 @@ function logoutExam() {
     location.reload();
 }
 
-// LOGIKA KEAMANAN DISTRAKSI
-let isInteractingWithForm = false;
-
+// EVENT LISTENERS DETEKSI DISTRAKSI
 document.addEventListener('visibilitychange', () => {
     if (document.hidden && isExamActive) {
         triggerViolationNotice('Dilarang berpindah tab atau meminimalkan browser!');
