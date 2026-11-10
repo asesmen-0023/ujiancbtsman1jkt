@@ -144,6 +144,7 @@ document.getElementById('studentLoginForm')?.addEventListener('submit', async (e
         return;
     }
 
+    // Ambil settings app_settings untuk enter_password
     const { data: settingsData } = await currentClient
         .from('app_settings')
         .select('*')
@@ -255,7 +256,7 @@ function closeTokenModal() {
     activeExam = null;
 }
 
-// 2.2 VERIFIKASI ENTER PASSWORD DARI APP_SETTINGS
+// 2.2 VERIFIKASI ENTER PASSWORD (AMBIL LANGSUNG DARI DB / APP_SETTINGS)
 document.getElementById('tokenForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     playSound('click');
@@ -263,21 +264,29 @@ document.getElementById('tokenForm')?.addEventListener('submit', async (e) => {
 
     if (!activeExam) return;
 
-    // Ambil enter_password dari app_settings Supabase (Nilai di Supabase: 12345)
-    const requiredEnterPassword = currentAppSettings?.enter_password || 'sman1jkt';
+    // Ambil ulang settings jika null untuk memastikan kueri selalu segar
+    if (!currentAppSettings && currentClient) {
+        const { data: fetchSettings } = await currentClient
+            .from('app_settings')
+            .select('*')
+            .limit(1)
+            .maybeSingle();
+        if (fetchSettings) currentAppSettings = fetchSettings;
+    }
+
+    const requiredEnterPassword = currentAppSettings?.enter_password || '12345';
 
     if (String(inputToken) !== String(requiredEnterPassword)) {
         showModernAlert("Password Ujian yang Anda masukkan salah! Mintalah password resmi kepada pengawas kelas.", "Password Ujian Salah", "error");
         return;
     }
 
-    // Jika password benar (12345), tutup modal token lalu langsung buka iframe
     closeTokenModal();
-    await startExamDirectly();
+    startExamDirectly();
 });
 
-// 3. PENYEDIAAN FRAME EMBEDDED GOOGLE FORM (DENGAN PENANGANAN ERROR UNSTUCK)
-async function startExamDirectly() {
+// 3. PENYEDIAAN FRAME EMBEDDED GOOGLE FORM (NON-BLOCKING)
+function startExamDirectly() {
     if (!activeExam) return;
 
     iframeLoadCount = 0;
@@ -285,24 +294,17 @@ async function startExamDirectly() {
     const studentNisn = String(loggedInStudent.nisn).trim();
     const subjectIdStr = String(activeExam.id).trim();
 
-    // Catat data awal pengerjaan ke Supabase (Jangan biarkan error membekukan antarmuka)
-    try {
-        const { error: upsertErr } = await currentClient.from('exam_submissions').upsert([{
-            nisn: studentNisn,
-            student_name: loggedInStudent.nama,
-            student_class: loggedInStudent.student_class,
-            subject_id: subjectIdStr,
-            is_completed: false
-        }], { onConflict: 'nisn,subject_id' });
+    // Jalankan pencatatan awal secara asinkron tanpa menghentikan UI
+    currentClient.from('exam_submissions').upsert([{
+        nisn: studentNisn,
+        student_name: loggedInStudent.nama,
+        student_class: loggedInStudent.student_class,
+        subject_id: subjectIdStr,
+        is_completed: false
+    }], { onConflict: 'nisn,subject_id' }).then(({ error }) => {
+        if (error) console.warn("Peringatan Supabase di startExamDirectly:", error.message);
+    });
 
-        if (upsertErr) {
-            console.warn("Gagal membuat draf pengerjaan awal di Supabase:", upsertErr.message);
-        }
-    } catch (err) {
-        console.error("Supabase Error di startExamDirectly:", err);
-    }
-
-    // LANGSUNG BUKA IFRAME GOOGLE FORM TANPA MENUNGGU KONEKSI DATABASE
     const iframe = document.getElementById('examIframe');
     const frameContainer = document.getElementById('examFrameContainer');
     const activeTitle = document.getElementById('activeExamTitle');
@@ -316,7 +318,6 @@ async function startExamDirectly() {
         activeTitle.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Ujian: ${activeExam.subjectName}`;
     }
     
-    // Tampilkan layar ujian penuh & minta mode fullscreen
     frameContainer?.classList.remove('hidden');
     requestFullscreenMode();
 }
@@ -394,7 +395,7 @@ function logoutExam() {
     location.reload();
 }
 
-// LOGIKA KEAMANAN DISTRAKSI (ANTI FALSE POSITIVE)
+// LOGIKA KEAMANAN DISTRAKSI
 document.addEventListener('visibilitychange', () => {
     if (document.hidden && isExamActive) {
         triggerViolationNotice('Dilarang berpindah tab atau meminimalkan browser!');
