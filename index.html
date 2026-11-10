@@ -3,309 +3,182 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CBT SMAN 1 Jakarta - Secure Exam Portal</title>
+    <title>CBT SMAN 1 Jakarta</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="style.css">
 </head>
-<body class="bg-slate-950 text-slate-100 font-sans select-none" oncontextmenu="return false;">
+<body class="bg-slate-100 text-slate-800 font-sans select-none min-h-screen" oncontextmenu="return false;">
 
     <!-- MODAL NOTIFIKASI MODERN -->
-    <div id="modernAlertModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md hidden flex items-center justify-center p-4 z-[99999] transition-all duration-300">
-        <div class="bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl p-6 w-full max-w-sm text-center transform scale-100 border-t-4 border-t-rose-500" id="alertCard">
-            <div id="alertIconBg" class="w-14 h-14 rounded-2xl bg-rose-500/10 text-rose-500 flex items-center justify-center mx-auto mb-4 font-black text-2xl shadow-inner">
+    <div id="modernAlertModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center p-4 z-[99999]">
+        <div class="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm text-center border-t-4 border-t-rose-500" id="alertCard">
+            <div id="alertIconBg" class="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto mb-3 font-bold text-xl">
                 <span id="alertIcon">⚠️</span>
             </div>
-            <h3 id="alertTitle" class="text-lg font-black text-white mb-2">Akses Ditolak</h3>
-            <p id="alertMessage" class="text-xs text-slate-300 leading-relaxed mb-6 font-medium">
-                Pesan notifikasi akan muncul di sini...
+            <h3 id="alertTitle" class="text-base font-bold text-slate-800 mb-1">Akses Ditolak</h3>
+            <p id="alertMessage" class="text-xs text-slate-600 leading-relaxed mb-5">
+                Pesan notifikasi ...
             </p>
-            <button onclick="closeModernAlert()" class="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-2xl text-xs transition border border-slate-700 active:scale-95">
-                Mengerti & Tutup
+            <button onclick="closeModernAlert()" class="w-full bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2.5 rounded-xl text-xs transition active:scale-95">
+                Baik
             </button>
         </div>
     </div>
 
-    <!-- MODAL PERINGATAN PELANGGARAN / DISTRAKSI -->
-    <div id="violationModal" class="fixed inset-0 bg-rose-950/90 backdrop-blur-md hidden flex items-center justify-center p-4 z-[9999]">
-        <div class="bg-slate-900 border border-rose-500/40 rounded-3xl p-6 w-full max-w-sm text-center shadow-2xl">
-            <div class="w-14 h-14 rounded-2xl bg-rose-500/20 text-rose-500 flex items-center justify-center mx-auto mb-3 font-bold text-2xl">
-                ⚠️
+    <!-- MODAL PERINGATAN PELANGGARAN -->
+    <div id="violationModal" class="fixed inset-0 bg-rose-900/80 backdrop-blur-sm hidden flex items-center justify-center p-4 z-[9999]">
+        <div class="bg-white border border-rose-200 rounded-2xl p-6 w-full max-w-sm text-center shadow-2xl">
+            <div class="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto mb-3 font-bold text-xl animate-bounce">
+                🚨
             </div>
-            <h3 class="text-lg font-black text-white mb-2">Terdeteksi Pelanggaran!</h3>
-            <p id="violationReason" class="text-xs text-rose-200 leading-relaxed mb-4">
+            <h3 class="text-base font-bold text-slate-900 mb-1">Terdeteksi Pelanggaran!</h3>
+            <p id="violationReason" class="text-xs text-slate-600 leading-relaxed mb-4">
                 Anda terdeteksi meninggalkan halaman ujian atau keluar dari mode layar penuh.
             </p>
-            <div class="bg-slate-800/80 p-3 rounded-2xl border border-slate-700 text-xs font-mono text-slate-300 mb-5">
-                Jumlah Pelanggaran: <span id="violationCount" class="font-bold text-amber-400 text-sm">0</span> kali
+            <div class="bg-slate-100 p-2.5 rounded-xl text-xs font-mono text-slate-700 mb-5">
+                Jumlah Pelanggaran: <span id="violationCount" class="font-bold text-rose-600 text-sm">0</span> kali
             </div>
-            <button onclick="resumeExam()" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-3 rounded-2xl text-xs transition shadow-lg shadow-rose-950 active:scale-95">
-                Kembali ke Ujian & Fullscreen
+            <button onclick="resumeExam()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl text-xs transition shadow-md active:scale-95">
+                Kembali ke Ujian
             </button>
         </div>
     </div>
 
-    <!-- MODAL LOGIN SISWA -->
-    <div id="studentLoginModal" class="fixed inset-0 bg-slate-950 flex items-center justify-center p-4 z-50">
-        <div class="bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl p-8 w-full max-w-md">
-            <div class="flex items-center space-x-3 mb-6">
-                <div class="w-10 h-10 rounded-2xl bg-blue-600/20 border border-blue-500/30 text-blue-400 flex items-center justify-center font-black text-xl">
-                    📝
-                </div>
-                <div>
-                    <h2 class="text-xl font-black text-white leading-tight">Ujian Online (iOS / SEB)</h2>
-                    <p class="text-xs text-slate-400 font-medium">CBT Portal - SMAN 1 Jakarta</p>
-                </div>
-            </div>
+    <!-- MODAL AUTENTIKASI PASSWORD UJIAN (SESUAI GAMBAR 3) -->
+    <div id="tokenModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-[9000]">
+        <div class="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm text-left">
+            <h3 class="text-base font-bold text-slate-900 mb-1">Autentikasi Ujian</h3>
+            <p class="text-xs text-slate-500 mb-4">Masukkan password ujian yang diberikan oleh pengawas/proktor:</p>
             
-            <form id="studentLoginForm" class="space-y-4">
+            <form id="tokenForm" class="space-y-4">
                 <div>
-                    <label class="block text-xs font-bold text-slate-400 mb-1.5">Pilih Angkatan / Server Database</label>
-                    <select id="serverAngkatan" class="w-full bg-slate-800/90 border border-slate-700 p-3.5 rounded-2xl text-xs font-bold text-white outline-none focus:ring-2 focus:ring-blue-500 transition">
-                        <option value="X">Server Kelas X</option>
-                        <option value="XI">Server Kelas XI</option>
-                        <option value="XII">Server Kelas XII</option>
-                    </select>
+                    <label class="block text-xs font-bold text-blue-600 mb-1">Password Ujian</label>
+                    <input type="password" id="inputExamToken" class="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm font-mono text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 transition" placeholder="******" required>
                 </div>
-                <div>
-                    <label class="block text-xs font-bold text-slate-400 mb-1.5">NISN Siswa</label>
-                    <input type="text" id="studentNisn" class="w-full bg-slate-800/90 border border-slate-700 p-3.5 rounded-2xl text-xs font-mono text-white outline-none focus:ring-2 focus:ring-blue-500 transition" placeholder="Contoh: 0012345678" required>
+                <div class="flex space-x-3 pt-2">
+                    <button type="button" onclick="closeTokenModal()" class="w-1/2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2.5 rounded-xl text-xs transition">
+                        BATAL
+                    </button>
+                    <button type="submit" class="w-1/2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl text-xs transition shadow-md">
+                        MULAI UJIAN
+                    </button>
                 </div>
-                <div>
-                    <label class="block text-xs font-bold text-slate-400 mb-1.5">Password Ujian</label>
-                    <input type="password" id="studentPass" class="w-full bg-slate-800/90 border border-slate-700 p-3.5 rounded-2xl text-xs text-white outline-none focus:ring-2 focus:ring-blue-500 transition" placeholder="Masukkan password (default = NISN)" required>
-                </div>
-                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold p-3.5 rounded-2xl text-xs transition shadow-lg shadow-blue-950 active:scale-95 mt-2">
-                    Mulai Masuk Ujian
-                </button>
             </form>
         </div>
     </div>
 
-    <!-- HALAMAN UTAMA UJIAN (SETELAH LOGIN) -->
-    <div id="examApp" class="hidden min-h-screen flex flex-col">
-        <header class="bg-slate-900 border-b border-slate-800 p-4 flex justify-between items-center sticky top-0 z-40">
-            <div class="flex items-center space-x-3">
-                <div class="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center font-bold text-sm">
-                    🎓
+    <!-- MODAL MINI GAME MENUNGGU -->
+    <div id="gameModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-[9000]">
+        <div class="bg-white rounded-2xl p-6 w-full max-w-xs text-center shadow-2xl border border-slate-100">
+            <h3 class="text-sm font-bold text-slate-800 mb-1">🎮 Terima Kasih</h3>
+            <p class="text-[11px] text-slate-500 mb-4">Password keluat ujian akan diberikan oleh pengawas</p>
+            
+            <div id="gameBoard" class="grid grid-cols-3 gap-2 bg-slate-100 p-3 rounded-2xl mx-auto w-fit mb-4">
+                <div class="cell bg-white rounded-xl text-slate-800 border border-slate-200 shadow-sm" onclick="makeMove(0)"></div>
+                <div class="cell bg-white rounded-xl text-slate-800 border border-slate-200 shadow-sm" onclick="makeMove(1)"></div>
+                <div class="cell bg-white rounded-xl text-slate-800 border border-slate-200 shadow-sm" onclick="makeMove(2)"></div>
+                <div class="cell bg-white rounded-xl text-slate-800 border border-slate-200 shadow-sm" onclick="makeMove(3)"></div>
+                <div class="cell bg-white rounded-xl text-slate-800 border border-slate-200 shadow-sm" onclick="makeMove(4)"></div>
+                <div class="cell bg-white rounded-xl text-slate-800 border border-slate-200 shadow-sm" onclick="makeMove(5)"></div>
+                <div class="cell bg-white rounded-xl text-slate-800 border border-slate-200 shadow-sm" onclick="makeMove(6)"></div>
+                <div class="cell bg-white rounded-xl text-slate-800 border border-slate-200 shadow-sm" onclick="makeMove(7)"></div>
+                <div class="cell bg-white rounded-xl text-slate-800 border border-slate-200 shadow-sm" onclick="makeMove(8)"></div>
+            </div>
+
+            <p id="gameStatus" class="text-xs font-bold text-blue-600 mb-4">Giliran Pemain: X</p>
+            <div class="flex space-x-2">
+                <button onclick="resetGame()" class="w-1/2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2 rounded-xl text-xs">Reset</button>
+                <button onclick="toggleGameModal(false)" class="w-1/2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-xl text-xs">Tutup</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCREEN 1: HALAMAN LOGIN SISWA (SESUAI GAMBAR 2) -->
+    <div id="studentLoginModal" class="min-h-screen flex flex-col items-center justify-center p-4">
+        <div class="w-full max-w-sm text-center mb-6">
+            <!-- LOGO SEKOLAH -->
+            <div class="w-20 h-20 mx-auto mb-3 flex items-center justify-center">
+                <img src="https://upload.wikimedia.org/wikipedia/commons/e/e4/Logo_SMA_Negeri_1_Jakarta.png" onerror="this.onerror=null; this.src='https://cdn-icons-png.flaticon.com/512/2991/2991108.png'" alt="Logo SMAN 1 Jakarta" class="w-full h-full object-contain">
+            </div>
+            <p class="text-xs font-bold text-blue-600 tracking-wider uppercase mb-1">APLIKASI UJIAN</p>
+            <h1 class="text-xl font-black text-slate-900">SMA NEGERI 1 JAKARTA</h1>
+            <p class="text-xs text-slate-500 mt-1">Masukkan NISN dan Password untuk memulai</p>
+        </div>
+
+        <div class="bg-white rounded-3xl shadow-xl border border-slate-100 p-6 w-full max-w-sm">
+            <form id="studentLoginForm" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1.5">Pilih Angkatan / Server</label>
+                    <select id="serverAngkatan" class="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 transition">
+                        <option value="X">Kelas X</option>
+                        <option value="XI">Kelas XI</option>
+                        <option value="XII">Kelas XII</option>
+                    </select>
                 </div>
                 <div>
-                    <h1 id="lblStudentName" class="font-bold text-sm text-white uppercase tracking-wide">-</h1>
-                    <p id="lblStudentClass" class="text-[11px] text-slate-400 font-mono">-</p>
+                    <label class="block text-xs font-bold text-slate-700 mb-1.5">NISN Siswa</label>
+                    <input type="text" id="studentNisn" class="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs font-mono text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 transition" placeholder="Contoh: 0012345677" required>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1.5">Password</label>
+                    <input type="password" id="studentPass" class="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 transition" placeholder="Masukkan Password" required>
+                </div>
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold p-3 rounded-xl text-xs transition shadow-lg shadow-blue-500/20 active:scale-95 mt-2">
+                    MASUK
+                </button>
+            </form>
+        </div>
+        <p class="text-[11px] text-slate-400 mt-6 font-medium">1.0 SMAN 1 JAKARTA</p>
+    </div>
+
+    <!-- SCREEN 2: HALAMAN DASHBOARD MAPEL (SESUAI GAMBAR 1) -->
+    <div id="examApp" class="hidden min-h-screen flex flex-col">
+        <!-- HEADER BIRU SMAN 1 JAKARTA -->
+        <header class="bg-blue-600 text-white p-6 shadow-md relative">
+            <div class="max-w-md mx-auto flex justify-between items-start">
+                <div>
+                    <p class="text-xs text-blue-100 font-medium mb-0.5">Portal Ujian</p>
+                    <h1 class="text-xl font-bold">Selamat Datang, <span id="lblStudentName">Siswa</span></h1>
+                    <p id="lblStudentClass" class="text-xs text-blue-100 mt-1 font-mono">-</p>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <button onclick="toggleGameModal(true)" class="bg-blue-500/80 hover:bg-blue-500 text-white text-xs font-bold px-2.5 py-1.5 rounded-lg border border-blue-400 transition" title="Main Game">
+                        🎮
+                    </button>
+                    <button onclick="logoutExam()" class="bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition">
+                        Keluar
+                    </button>
                 </div>
             </div>
-            <button onclick="logoutExam()" class="bg-rose-600/10 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-500/30 text-xs font-bold px-4 py-2 rounded-xl transition active:scale-95">
-                Keluar Sesi
-            </button>
         </header>
 
-        <main class="flex-1 p-6 max-w-5xl mx-auto w-full">
-            <h2 class="text-base font-bold text-slate-300 mb-4 flex items-center gap-2">
-                <span>📚</span> Daftar Soal Ujian Aktif
-            </h2>
-            <div id="examListContainer" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <!-- List soal dari Supabase -->
+        <main class="flex-1 p-4 max-w-md mx-auto w-full">
+            <h2 class="text-xs font-bold text-slate-700 mb-3 uppercase tracking-wider">Pilih Ujian Hari Ini</h2>
+            <div id="examListContainer" class="space-y-3">
+                <!-- List soal bentuk Card Putih akan dirender di sini -->
             </div>
         </main>
     </div>
 
-    <script>
-        // Konfigurasi 3 Server Supabase SMAN 1 Jakarta
-        const SUPABASE_SERVERS = {
-            "X": {
-                name: "Kelas X",
-                url: "https://ulroqkrnwzzrgkasrqit.supabase.co",
-                anonKey: "sb_publishable_DJm-HRJpia9X3CzOlBq61Q_Dqct-DPi"
-            },
-            "XI": {
-                name: "Kelas XI",
-                url: "https://oypvpmhvkqhuhamjpjnu.supabase.co",
-                anonKey: "sb_publishable_H1n_goBAP5xaUrso_sAoWA_F491hDVE"
-            },
-            "XII": {
-                name: "Kelas XII",
-                url: "https://uqxzhrdmpplnlfwvlkag.supabase.co",
-                anonKey: "sb_publishable_pXrBRuXMyM65VUv_jIC7HQ_hza_4hTJ"
-            }
-        };
+    <!-- SCREEN 3: LAYAR FRAME GOOGLE FORM EMBEDDED -->
+    <div id="examFrameContainer" class="hidden fixed inset-0 bg-slate-900 z-50 flex flex-col w-full h-full">
+        <header class="bg-blue-600 text-white p-3 flex justify-between items-center h-14 shrink-0 shadow-md">
+            <div class="flex items-center space-x-2">
+                <span id="activeExamTitle" class="font-bold text-xs flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Mode Ujian
+                </span>
+            </div>
+            <button onclick="finishExamFrame()" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition shadow">
+                Selesai Ujian
+            </button>
+        </header>
+        <div class="flex-1 w-full h-full relative bg-white">
+            <iframe id="examIframe" class="w-full h-full border-0" src="" allowfullscreen></iframe>
+        </div>
+    </div>
 
-        let currentClient = null;
-        let loggedInStudent = null;
-        let violations = 0;
-        let isExamActive = false;
-
-        // UTILITY NOTIFIKASI MODERN
-        function showModernAlert(message, title = 'Akses Ditolak', type = 'error') {
-            const modal = document.getElementById('modernAlertModal');
-            const alertCard = document.getElementById('alertCard');
-            const alertTitle = document.getElementById('alertTitle');
-            const alertMessage = document.getElementById('alertMessage');
-            const alertIcon = document.getElementById('alertIcon');
-            const alertIconBg = document.getElementById('alertIconBg');
-
-            alertTitle.innerText = title;
-            alertMessage.innerText = message;
-
-            if (type === 'error') {
-                alertCard.className = "bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl p-6 w-full max-w-sm text-center transform scale-100 border-t-4 border-t-rose-500";
-                alertIconBg.className = "w-14 h-14 rounded-2xl bg-rose-500/10 text-rose-500 flex items-center justify-center mx-auto mb-4 font-black text-2xl shadow-inner";
-                alertIcon.innerText = "⚠️";
-            } else if (type === 'warning') {
-                alertCard.className = "bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl p-6 w-full max-w-sm text-center transform scale-100 border-t-4 border-t-amber-500";
-                alertIconBg.className = "w-14 h-14 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center mx-auto mb-4 font-black text-2xl shadow-inner";
-                alertIcon.innerText = "⚡";
-            } else if (type === 'success') {
-                alertCard.className = "bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl p-6 w-full max-w-sm text-center transform scale-100 border-t-4 border-t-emerald-500";
-                alertIconBg.className = "w-14 h-14 rounded-2xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center mx-auto mb-4 font-black text-2xl shadow-inner";
-                alertIcon.innerText = "✅";
-            }
-
-            modal.classList.remove('hidden');
-        }
-
-        function closeModernAlert() {
-            document.getElementById('modernAlertModal').classList.add('hidden');
-        }
-
-        document.getElementById('studentLoginForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const angkatan = document.getElementById('serverAngkatan').value;
-            const nisn = document.getElementById('studentNisn').value.trim();
-            const pass = document.getElementById('studentPass').value.trim();
-
-            const config = SUPABASE_SERVERS[angkatan];
-            
-            if (typeof supabase !== 'undefined' && supabase.createClient) {
-                currentClient = supabase.createClient(config.url, config.anonKey, {
-                    auth: {
-                        persistSession: false,
-                        autoRefreshToken: false
-                    }
-                });
-            } else {
-                showModernAlert('Library Supabase gagal dimuat. Periksa sambungan internet Anda.', 'Gagal Koneksi', 'error');
-                return;
-            }
-
-            // Cari data siswa di tabel students
-            const { data, error } = await currentClient
-                .from('students')
-                .select('*')
-                .eq('nisn', nisn)
-                .maybeSingle();
-
-            if (error || !data) {
-                showModernAlert(`NISN (${nisn}) tidak ditemukan pada ${config.name}. Pastikan Anda memilih server angkatan yang sesuai!`, 'NISN Tidak Ditemukan', 'error');
-                return;
-            }
-
-            const validPassword = data.password ? data.password : data.nisn;
-            if (pass !== validPassword) {
-                showModernAlert('Password yang Anda masukkan salah. Silakan periksa kembali password Anda!', 'Password Salah', 'error');
-                return;
-            }
-
-            loggedInStudent = data;
-            isExamActive = true;
-            
-            document.getElementById('studentLoginModal').classList.add('hidden');
-            document.getElementById('examApp').classList.remove('hidden');
-            document.getElementById('lblStudentName').innerText = data.nama;
-            document.getElementById('lblStudentClass').innerText = `Kelas: ${data.student_class} | NISN: ${data.nisn}`;
-
-            requestFullscreenMode();
-            loadAvailableExams(data.student_class);
-        });
-
-        async function loadAvailableExams(studentClass) {
-            const { data, error } = await currentClient
-                .from('exams')
-                .select('*')
-                .eq('is_active', true);
-
-            const container = document.getElementById('examListContainer');
-            if (error || !data || data.length === 0) {
-                container.innerHTML = `
-                    <div class="col-span-full bg-slate-900 border border-slate-800 p-8 rounded-3xl text-center">
-                        <div class="text-3xl mb-2">📭</div>
-                        <p class="text-slate-400 text-xs font-semibold">Belum ada soal ujian yang diaktifkan oleh proktor saat ini.</p>
-                    </div>`;
-                return;
-            }
-
-            container.innerHTML = data.map(exam => `
-                <div class="bg-slate-900 border border-slate-800 p-6 rounded-3xl flex flex-col justify-between shadow-xl hover:border-slate-700 transition">
-                    <div>
-                        <span class="bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[10px] font-bold px-3 py-1 rounded-full">${exam.student_class}</span>
-                        <h3 class="font-bold text-white text-base mt-3 mb-1">${exam.subject_name}</h3>
-                        <p class="text-[11px] text-slate-400 font-mono">Tersedia via Google Form</p>
-                    </div>
-                    <button onclick="startExam('${exam.form_url}', '${exam.id}')" class="mt-5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-2xl text-xs transition shadow-lg shadow-emerald-950 active:scale-95">
-                        Mulai Kerjakan Soal
-                    </button>
-                </div>
-            `).join('');
-        }
-
-        function startExam(url, examId) {
-            currentClient.from('exam_submissions').insert([{
-                nisn: loggedInStudent.nisn,
-                student_name: loggedInStudent.nama,
-                student_class: loggedInStudent.student_class,
-                subject_id: examId,
-                is_completed: false
-            }]).then(() => {
-                window.location.href = url;
-            });
-        }
-
-        function logoutExam() {
-            isExamActive = false;
-            location.reload();
-        }
-
-        // LOGIKA KEAMANAN & DETEKSI DISTRAKSI
-        function triggerViolationNotice(reason) {
-            if (!isExamActive) return;
-
-            violations++;
-            document.getElementById('violationReason').innerText = reason;
-            document.getElementById('violationCount').innerText = violations;
-            document.getElementById('violationModal').classList.remove('hidden');
-        }
-
-        function resumeExam() {
-            document.getElementById('violationModal').classList.add('hidden');
-            requestFullscreenMode();
-        }
-
-        function requestFullscreenMode() {
-            const elem = document.documentElement;
-            if (elem.requestFullscreen) {
-                elem.requestFullscreen().catch(() => {});
-            } else if (elem.webkitRequestFullscreen) {
-                elem.webkitRequestFullscreen();
-            }
-        }
-
-        document.addEventListener('visibilitychange', () => {
-            if (document.hidden) {
-                triggerViolationNotice('Dilarang berpindah tab atau meminimalkan browser!');
-            }
-        });
-
-        window.addEventListener('blur', () => {
-            triggerViolationNotice('Dilarang membuka/mengaktifkan aplikasi lain saat ujian!');
-        });
-
-        const handleFullscreenChange = () => {
-            const isFullscreen = document.fullscreenElement || document.webkitFullscreenElement;
-            if (!isFullscreen && isExamActive) {
-                triggerViolationNotice('Layar ujian wajib dalam mode layar penuh (Fullscreen)!');
-            }
-        };
-
-        document.addEventListener('fullscreenchange', handleFullscreenChange);
-        document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
-    </script>
+    <script src="game.js"></script>
+    <script src="app.js"></script>
 </body>
 </html>
