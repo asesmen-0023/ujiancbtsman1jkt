@@ -1,161 +1,368 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CBT SMAN 1 Jakarta</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="style.css">
-</head>
-<body class="bg-slate-100 text-slate-800 font-sans select-none min-h-screen" oncontextmenu="return false;">
+// Konfigurasi 3 Server Supabase SMAN 1 Jakarta
+const SUPABASE_SERVERS = {
+    "X": {
+        name: "Kelas X",
+        url: "https://ulroqkrnwzzrgkasrqit.supabase.co",
+        anonKey: "sb_publishable_DJm-HRJpia9X3CzOlBq61Q_Dqct-DPi"
+    },
+    "XI": {
+        name: "Kelas XI",
+        url: "https://oypvpmhvkqhuhamjpjnu.supabase.co",
+        anonKey: "sb_publishable_H1n_goBAP5xaUrso_sAoWA_F491hDVE"
+    },
+    "XII": {
+        name: "Kelas XII",
+        url: "https://uqxzhrdmpplnlfwvlkag.supabase.co",
+        anonKey: "sb_publishable_pXrBRuXMyM65VUv_jIC7HQ_hza_4hTJ"
+    }
+};
 
-    <!-- MODAL NOTIFIKASI MODERN -->
-    <div id="modernAlertModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center p-4 z-[99999]">
-        <div class="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm text-center border-t-4 border-t-rose-500" id="alertCard">
-            <div id="alertIconBg" class="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto mb-3 font-bold text-xl">
-                <span id="alertIcon">⚠️</span>
+let currentClient = null;
+let loggedInStudent = null;
+let violations = 0;
+let isExamActive = false;
+let activeExam = null;
+let currentAppSettings = null;
+let iframeLoadCount = 0;
+let isInteractingWithForm = false;
+
+// Web Audio Synthesizer
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+function playSound(type) {
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    if (type === 'alarm') {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.3);
+        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.3);
+    } else if (type === 'click') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.08);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.08);
+    } else if (type === 'success') {
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(523.25, audioCtx.currentTime);
+        osc.frequency.setValueAtTime(659.25, audioCtx.currentTime + 0.15);
+        osc.frequency.setValueAtTime(783.99, audioCtx.currentTime + 0.3);
+        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.6);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.6);
+    }
+}
+
+// FUNGSI UTILITY DILETAKKAN DI ATAS AGAR TIDAK CAUSE REFERENCE ERROR
+function requestFullscreenMode() {
+    const elem = document.documentElement;
+    if (elem.requestFullscreen) {
+        elem.requestFullscreen().catch(() => {});
+    } else if (elem.webkitRequestFullscreen) {
+        elem.webkitRequestFullscreen();
+    }
+}
+
+function triggerViolationNotice(reason) {
+    if (!isExamActive) return;
+
+    playSound('alarm');
+    violations++;
+    const vReason = document.getElementById('violationReason');
+    const vCount = document.getElementById('violationCount');
+    if (vReason) vReason.innerText = reason;
+    if (vCount) vCount.innerText = violations;
+    document.getElementById('violationModal')?.classList.remove('hidden');
+}
+
+function resumeExam() {
+    playSound('click');
+    document.getElementById('violationModal')?.classList.add('hidden');
+    requestFullscreenMode();
+}
+
+function showModernAlert(message, title = 'Akses Ditolak', type = 'error') {
+    playSound(type === 'success' ? 'success' : 'alarm');
+    const modal = document.getElementById('modernAlertModal');
+    const alertTitle = document.getElementById('alertTitle');
+    const alertMessage = document.getElementById('alertMessage');
+
+    if (alertTitle) alertTitle.innerText = title;
+    if (alertMessage) alertMessage.innerText = message;
+    modal?.classList.remove('hidden');
+}
+
+function closeModernAlert() {
+    playSound('click');
+    document.getElementById('modernAlertModal')?.classList.add('hidden');
+}
+
+// 1. LOGIN SISWA
+document.getElementById('studentLoginForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    playSound('click');
+    const angkatan = document.getElementById('serverAngkatan').value;
+    const nisn = document.getElementById('studentNisn').value.trim();
+    const pass = document.getElementById('studentPass').value.trim();
+
+    const config = SUPABASE_SERVERS[angkatan];
+    
+    if (typeof supabase !== 'undefined' && supabase.createClient) {
+        currentClient = supabase.createClient(config.url, config.anonKey, {
+            auth: { persistSession: false, autoRefreshToken: false }
+        });
+    } else {
+        showModernAlert('Library Supabase gagal dimuat.', 'Gagal Koneksi', 'error');
+        return;
+    }
+
+    const { data, error } = await currentClient
+        .from('students')
+        .select('*')
+        .eq('nisn', nisn)
+        .maybeSingle();
+
+    if (error || !data) {
+        showModernAlert(`NISN (${nisn}) tidak ditemukan pada ${config.name}.`, 'NISN Tidak Ditemukan', 'error');
+        return;
+    }
+
+    const validPassword = data.password ? data.password : data.nisn;
+    if (pass !== validPassword) {
+        showModernAlert('Password yang Anda masukkan salah!', 'Password Salah', 'error');
+        return;
+    }
+
+    // Ambil settings app_settings untuk exit_password
+    const { data: settingsData } = await currentClient
+        .from('app_settings')
+        .select('*')
+        .limit(1)
+        .maybeSingle();
+
+    currentAppSettings = settingsData;
+    loggedInStudent = data;
+    isExamActive = true;
+    
+    document.getElementById('studentLoginModal')?.classList.add('hidden');
+    document.getElementById('examApp')?.classList.remove('hidden');
+    document.getElementById('lblStudentName').innerText = data.nama;
+    document.getElementById('lblStudentClass').innerText = `Kelas: ${data.student_class} | NISN: ${data.nisn}`;
+
+    requestFullscreenMode();
+    loadAvailableExams(data.student_class);
+});
+
+// 2. DASHBOARD SOAL UJIAN
+async function loadAvailableExams(studentClass) {
+    const container = document.getElementById('examListContainer');
+    if (!container) return;
+
+    // Ambil semua soal aktif
+    const { data: exams, error } = await currentClient
+        .from('exams')
+        .select('*')
+        .eq('is_active', true);
+
+    if (error) {
+        console.error("Error fetching exams:", error);
+        container.innerHTML = `
+            <div class="bg-white border border-slate-200 p-6 rounded-2xl text-center shadow-sm">
+                <p class="text-rose-500 text-xs font-semibold">Gagal mengambil data ujian dari database server.</p>
+            </div>`;
+        return;
+    }
+
+    // Ambil riwayat pengerjaan yang SUDAH SELESAI
+    const { data: history } = await currentClient
+        .from('exam_submissions')
+        .select('subject_id')
+        .eq('nisn', loggedInStudent.nisn)
+        .eq('is_completed', true);
+
+    const completedSubjectIds = (history || []).map(h => String(h.subject_id));
+    const userClass = String(studentClass).trim().toLowerCase();
+    
+    const availableExams = (exams || []).filter(exam => {
+        const examClass = String(exam.student_class || '').trim().toLowerCase();
+        return examClass === userClass || 
+               examClass === 'semua' || 
+               userClass.startsWith(examClass) || 
+               examClass.startsWith(userClass);
+    });
+
+    if (availableExams.length === 0) {
+        container.innerHTML = `
+            <div class="bg-white border border-slate-200 p-6 rounded-2xl text-center shadow-sm">
+                <p class="text-slate-500 text-xs font-semibold">Belum ada kelas ujian aktif yang ditargetkan untuk kelas ${studentClass}.</p>
+            </div>`;
+        return;
+    }
+
+    container.innerHTML = availableExams.map(exam => {
+        const isFinished = completedSubjectIds.includes(String(exam.id));
+        const subjectName = exam.subject_name || 'Uji Coba Ujian';
+        const formUrl = exam.form_url || '';
+
+        return `
+        <div class="exam-card flex justify-between items-center ${isFinished ? 'opacity-60' : ''}">
+            <div>
+                <h3 class="font-bold text-blue-600 text-base leading-snug">${subjectName}</h3>
+                <p class="text-xs text-slate-500 mt-0.5">Google Form Evaluasi Pembelajaran</p>
             </div>
-            <h3 id="alertTitle" class="text-base font-bold text-slate-800 mb-1">Akses Ditolak</h3>
-            <p id="alertMessage" class="text-xs text-slate-600 leading-relaxed mb-5">
-                Pesan ...
-            </p>
-            <button onclick="closeModernAlert()" class="w-full bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2.5 rounded-xl text-xs transition active:scale-95">
-                Baik
-            </button>
-        </div>
-    </div>
-
-    <!-- MODAL PERINGATAN PELANGGARAN -->
-    <div id="violationModal" class="fixed inset-0 bg-rose-900/80 backdrop-blur-sm hidden flex items-center justify-center p-4 z-[9999]">
-        <div class="bg-white border border-rose-200 rounded-2xl p-6 w-full max-w-sm text-center shadow-2xl">
-            <div class="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto mb-3 font-bold text-xl animate-bounce">
-                🚨
-            </div>
-            <h3 class="text-base font-bold text-slate-900 mb-1">Terdeteksi Pelanggaran!</h3>
-            <p id="violationReason" class="text-xs text-slate-600 leading-relaxed mb-4">
-                Anda terdeteksi meninggalkan halaman ujian atau keluar.
-            </p>
-            <div class="bg-slate-100 p-2.5 rounded-xl text-xs font-mono text-slate-700 mb-5">
-                Jumlah Pelanggaran: <span id="violationCount" class="font-bold text-rose-600 text-sm">0</span> kali
-            </div>
-            <button onclick="resumeExam()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl text-xs transition shadow-md active:scale-95">
-                Kembali ke Ujian
-            </button>
-        </div>
-    </div>
-
-    <!-- MODAL PERMAINAN & VERIFIKASI PASSWORD KELUAR UJIAN -->
-    <div id="exitGameModal" class="fixed inset-0 bg-black/75 backdrop-blur-md hidden flex items-center justify-center p-4 z-[9000]">
-        <div class="bg-white rounded-3xl p-6 w-full max-w-sm text-center shadow-2xl border border-slate-100">
-            <div class="inline-block bg-emerald-100 text-emerald-600 px-3 py-1 rounded-full text-[11px] font-bold mb-2">
-                ✅ Google Form Terkirim!
-            </div>
-            <h3 class="text-base font-bold text-slate-800 mb-1">🎮 Terima Kasih</h3>
-            <p class="text-xs text-slate-500 mb-4">Silakan menunggu pengawas memberikan Password Keluar Ujian.</p>
-            
-            <!-- BOARD TIC TAC TOE -->
-            <div id="gameBoard" class="grid grid-cols-3 gap-2 bg-slate-100 p-3 rounded-2xl mx-auto w-fit mb-3">
-                <div class="cell bg-white rounded-xl text-slate-800 border border-slate-200 shadow-sm" onclick="makeMove(0)"></div>
-                <div class="cell bg-white rounded-xl text-slate-800 border border-slate-200 shadow-sm" onclick="makeMove(1)"></div>
-                <div class="cell bg-white rounded-xl text-slate-800 border border-slate-200 shadow-sm" onclick="makeMove(2)"></div>
-                <div class="cell bg-white rounded-xl text-slate-800 border border-slate-200 shadow-sm" onclick="makeMove(3)"></div>
-                <div class="cell bg-white rounded-xl text-slate-800 border border-slate-200 shadow-sm" onclick="makeMove(4)"></div>
-                <div class="cell bg-white rounded-xl text-slate-800 border border-slate-200 shadow-sm" onclick="makeMove(5)"></div>
-                <div class="cell bg-white rounded-xl text-slate-800 border border-slate-200 shadow-sm" onclick="makeMove(6)"></div>
-                <div class="cell bg-white rounded-xl text-slate-800 border border-slate-200 shadow-sm" onclick="makeMove(7)"></div>
-                <div class="cell bg-white rounded-xl text-slate-800 border border-slate-200 shadow-sm" onclick="makeMove(8)"></div>
-            </div>
-
-            <p id="gameStatus" class="text-xs font-bold text-blue-600 mb-4">Giliran Pemain: X</p>
-            <button onclick="resetGame()" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-1.5 rounded-xl text-xs mb-4">Reset Papan Game</button>
-
-            <!-- FORM INPUT PASSWORD KELUAR PROKTOR -->
-            <form id="exitPasswordForm" class="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-left space-y-3">
-                <label class="block text-xs font-bold text-slate-700">Password Keluar</label>
-                <input type="password" id="inputExitPassword" class="w-full bg-white border border-slate-300 p-2.5 rounded-xl text-xs font-mono text-slate-800 outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Masukkan password exit" required>
-                <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl text-xs transition shadow-md">
-                    KELUAR UJIAN
-                </button>
-            </form>
-        </div>
-    </div>
-
-    <!-- TAHAP 1: HALAMAN LOGIN SISWA -->
-    <div id="studentLoginModal" class="min-h-screen flex flex-col items-center justify-center p-4">
-        <div class="w-full max-w-sm text-center mb-6">
-            <div class="w-20 h-20 mx-auto mb-3 flex items-center justify-center">
-                <img src="https://upload.wikimedia.org/wikipedia/commons/e/e4/Logo_SMA_Negeri_1_Jakarta.png" onerror="this.onerror=null; this.src='https://cdn-icons-png.flaticon.com/512/2991/2991108.png'" alt="Logo SMAN 1 Jakarta" class="w-full h-full object-contain">
-            </div>
-            <p class="text-xs font-bold text-blue-600 tracking-wider uppercase mb-1">CBT</p>
-            <h1 class="text-xl font-black text-slate-900">SMA NEGERI 1 JAKARTA</h1>
-            <p class="text-xs text-slate-500 mt-1">Masukkan NISN dan Password untuk memulai</p>
-        </div>
-
-        <div class="bg-white rounded-3xl shadow-xl border border-slate-100 p-6 w-full max-w-sm">
-            <form id="studentLoginForm" class="space-y-4">
-                <div>
-                    <label class="block text-xs font-bold text-slate-700 mb-1.5">Pilih Kelas</label>
-                    <select id="serverAngkatan" class="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 transition">
-                        <option value="X">Kelas X</option>
-                        <option value="XI">Kelas XI</option>
-                        <option value="XII">Kelas XII</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-xs font-bold text-slate-700 mb-1.5">NISN Siswa</label>
-                    <input type="text" id="studentNisn" class="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs font-mono text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 transition" placeholder="Contoh: 0012345677" required>
-                </div>
-                <div>
-                    <label class="block text-xs font-bold text-slate-700 mb-1.5">Password</label>
-                    <input type="password" id="studentPass" class="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 transition" placeholder="Masukkan Password" required>
-                </div>
-                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold p-3 rounded-xl text-xs transition shadow-lg shadow-blue-500/20 active:scale-95 mt-2">
-                    MASUK
-                </button>
-            </form>
-        </div>
-        <p class="text-[11px] text-slate-400 mt-6 font-medium">1.0 SMAN 1 JAKARTA</p>
-    </div>
-
-    <!-- TAHAP 2: DASHBOARD PILIH UJIAN HARI INI -->
-    <div id="examApp" class="hidden min-h-screen flex flex-col">
-        <header class="bg-blue-600 text-white p-6 shadow-md relative">
-            <div class="max-w-md mx-auto flex justify-between items-start">
-                <div>
-                    <p class="text-xs text-blue-100 font-medium mb-0.5">Portal Ujian</p>
-                    <h1 class="text-xl font-bold">Selamat Datang, <span id="lblStudentName">Siswa</span></h1>
-                    <p id="lblStudentClass" class="text-xs text-blue-100 mt-1 font-mono">-</p>
-                </div>
-                <button onclick="logoutExam()" class="bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition">
-                    Keluar
-                </button>
-            </div>
-        </header>
-
-        <main class="flex-1 p-4 max-w-md mx-auto w-full">
-            <h2 class="text-xs font-bold text-slate-700 mb-3 uppercase tracking-wider">Pilih Ujian Hari Ini</h2>
-            <div id="examListContainer" class="space-y-3">
-                <!-- List soal bentuk Card Putih akan dirender di sini -->
-            </div>
-        </main>
-    </div>
-
-    <!-- TAHAP 3: EMBEDDED GOOGLE FORM UJIAN -->
-    <div id="examFrameContainer" class="hidden fixed inset-0 bg-slate-900 z-50 flex flex-col w-full h-full">
-        <header class="bg-blue-600 text-white p-3 flex justify-between items-center h-14 shrink-0 shadow-md">
-            <div class="flex items-center space-x-2">
-                <span id="activeExamTitle" class="font-bold text-xs flex items-center gap-2">
-                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Mode Ujian
+            ${isFinished ? `
+                <span class="text-xs font-bold text-slate-400 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
+                    🔒 Selesai
                 </span>
-            </div>
-        </header>
-        <div class="flex-1 w-full h-full relative bg-white">
-            <iframe id="examIframe" class="w-full h-full border-0" src="" allowfullscreen></iframe>
-        </div>
-    </div>
+            ` : `
+                <button onclick="startExamDirectly('${exam.id}', '${encodeURIComponent(subjectName)}', '${encodeURIComponent(formUrl)}')" class="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 active:scale-95 transition">
+                    Mulai &rarr;
+                </button>
+            `}
+        </div>`;
+    }).join('');
+}
 
-    <script src="game.js"></script>
-    <script src="app.js"></script>
-</body>
-</html>
+// 3. MULAI UJIAN
+async function startExamDirectly(id, name, formUrl) {
+    playSound('click');
+    activeExam = {
+        id: id,
+        subjectName: decodeURIComponent(name),
+        formUrl: decodeURIComponent(formUrl)
+    };
+
+    iframeLoadCount = 0;
+
+    await currentClient.from('exam_submissions').upsert([{
+        nisn: loggedInStudent.nisn,
+        student_name: loggedInStudent.nama,
+        student_class: loggedInStudent.student_class,
+        subject_id: activeExam.id,
+        is_completed: false
+    }], { onConflict: 'nisn,subject_id' });
+
+    const iframe = document.getElementById('examIframe');
+    const frameContainer = document.getElementById('examFrameContainer');
+    const activeTitle = document.getElementById('activeExamTitle');
+
+    if (iframe) {
+        iframe.src = activeExam.formUrl;
+        iframe.onload = handleIframeSubmit;
+    }
+
+    if (activeTitle) activeTitle.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Ujian: ${activeExam.subjectName}`;
+    
+    frameContainer?.classList.remove('hidden');
+    requestFullscreenMode();
+}
+
+// 4. OTOMATISASI SUBMIT FORM
+function handleIframeSubmit() {
+    iframeLoadCount++;
+
+    if (iframeLoadCount >= 2 && activeExam) {
+        playSound('success');
+
+        const iframe = document.getElementById('examIframe');
+        if (iframe) {
+            iframe.onload = null;
+            iframe.src = "";
+        }
+        document.getElementById('examFrameContainer')?.classList.add('hidden');
+
+        if (typeof resetGame === 'function') resetGame();
+        document.getElementById('inputExitPassword').value = '';
+        document.getElementById('exitGameModal')?.classList.remove('hidden');
+    }
+}
+
+// 5. VERIFIKASI EXIT PASSWORD
+document.getElementById('exitPasswordForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    playSound('click');
+    const exitPassInput = document.getElementById('inputExitPassword').value.trim();
+    const requiredExitPassword = currentAppSettings?.exit_password || 'sman1jkt2';
+
+    if (exitPassInput !== requiredExitPassword) {
+        showModernAlert("Password Keluar Ujian yang Anda masukkan salah! Mintalah password exit resmi kepada pengawas kelas.", "Password Exit Salah", "error");
+        return;
+    }
+
+    if (activeExam?.id && currentClient) {
+        await currentClient
+            .from('exam_submissions')
+            .update({ 
+                is_completed: true,
+                violation_count: violations 
+            })
+            .eq('nisn', loggedInStudent.nisn)
+            .eq('subject_id', activeExam.id);
+    }
+
+    playSound('success');
+    document.getElementById('exitGameModal')?.classList.add('hidden');
+    
+    loadAvailableExams(loggedInStudent.student_class);
+    requestFullscreenMode();
+
+    showModernAlert("Ujian telah sukses diverifikasi pengawas dan status otomatis terkunci di database.", "Ujian Selesai", "success");
+    activeExam = null;
+});
+
+function logoutExam() {
+    playSound('click');
+    isExamActive = false;
+    location.reload();
+}
+
+// EVENT LISTENERS DETEKSI DISTRAKSI
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden && isExamActive) {
+        triggerViolationNotice('Dilarang berpindah tab atau meminimalkan browser!');
+    }
+});
+
+window.addEventListener('blur', () => {
+    if (!isExamActive) return;
+
+    setTimeout(() => {
+        const activeElem = document.activeElement;
+        const isIframeActive = activeElem && activeElem.tagName === 'IFRAME';
+        
+        if (isIframeActive || isInteractingWithForm) {
+            return;
+        }
+
+        if (!document.hasFocus()) {
+            triggerViolationNotice('Dilarang membuka/mengaktifkan aplikasi lain saat ujian!');
+        }
+    }, 200);
+});
+
+const handleFullscreenChange = () => {
+    const isFullscreen = document.fullscreenElement || document.webkitFullscreenElement;
+    if (!isFullscreen && isExamActive) {
+        setTimeout(() => {
+            const currentFullscreen = document.fullscreenElement || document.webkitFullscreenElement;
+            if (!currentFullscreen && isExamActive) {
+                triggerViolationNotice('Layar ujian wajib dalam mode layar penuh (Fullscreen)!');
+            }
+        }, 300);
+    }
+};
+
+document.addEventListener('fullscreenchange', handleFullscreenChange);
+document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
