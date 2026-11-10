@@ -263,31 +263,46 @@ document.getElementById('tokenForm')?.addEventListener('submit', async (e) => {
 
     if (!activeExam) return;
 
+    // Ambil enter_password dari app_settings Supabase (Nilai di Supabase: 12345)
     const requiredEnterPassword = currentAppSettings?.enter_password || 'sman1jkt';
 
-    if (inputToken !== requiredEnterPassword) {
+    if (String(inputToken) !== String(requiredEnterPassword)) {
         showModernAlert("Password Ujian yang Anda masukkan salah! Mintalah password resmi kepada pengawas kelas.", "Password Ujian Salah", "error");
         return;
     }
 
+    // Jika password benar (12345), tutup modal token lalu langsung buka iframe
     closeTokenModal();
-    startExamDirectly();
+    await startExamDirectly();
 });
 
-// 3. PENYEDIAAN FRAME EMBEDDED GOOGLE FORM
+// 3. PENYEDIAAN FRAME EMBEDDED GOOGLE FORM (DENGAN PENANGANAN ERROR UNSTUCK)
 async function startExamDirectly() {
     if (!activeExam) return;
 
     iframeLoadCount = 0;
 
-    await currentClient.from('exam_submissions').upsert([{
-        nisn: String(loggedInStudent.nisn).trim(),
-        student_name: loggedInStudent.nama,
-        student_class: loggedInStudent.student_class,
-        subject_id: activeExam.id,
-        is_completed: false
-    }], { onConflict: 'nisn,subject_id' });
+    const studentNisn = String(loggedInStudent.nisn).trim();
+    const subjectIdStr = String(activeExam.id).trim();
 
+    // Catat data awal pengerjaan ke Supabase (Jangan biarkan error membekukan antarmuka)
+    try {
+        const { error: upsertErr } = await currentClient.from('exam_submissions').upsert([{
+            nisn: studentNisn,
+            student_name: loggedInStudent.nama,
+            student_class: loggedInStudent.student_class,
+            subject_id: subjectIdStr,
+            is_completed: false
+        }], { onConflict: 'nisn,subject_id' });
+
+        if (upsertErr) {
+            console.warn("Gagal membuat draf pengerjaan awal di Supabase:", upsertErr.message);
+        }
+    } catch (err) {
+        console.error("Supabase Error di startExamDirectly:", err);
+    }
+
+    // LANGSUNG BUKA IFRAME GOOGLE FORM TANPA MENUNGGU KONEKSI DATABASE
     const iframe = document.getElementById('examIframe');
     const frameContainer = document.getElementById('examFrameContainer');
     const activeTitle = document.getElementById('activeExamTitle');
@@ -297,8 +312,11 @@ async function startExamDirectly() {
         iframe.onload = handleIframeSubmit;
     }
 
-    if (activeTitle) activeTitle.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Ujian: ${activeExam.subjectName}`;
+    if (activeTitle) {
+        activeTitle.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Ujian: ${activeExam.subjectName}`;
+    }
     
+    // Tampilkan layar ujian penuh & minta mode fullscreen
     frameContainer?.classList.remove('hidden');
     requestFullscreenMode();
 }
