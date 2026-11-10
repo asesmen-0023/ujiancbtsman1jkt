@@ -250,10 +250,10 @@ function promptExamToken(id, name, formUrl) {
     document.getElementById('tokenModal')?.classList.remove('hidden');
 }
 
+// PERBAIKAN: JANGAN MENGHAPUS activeExam SAAT MENUTUP MODAL DARI TOMBOL BATAL/SELESAI
 function closeTokenModal() {
     playSound('click');
     document.getElementById('tokenModal')?.classList.add('hidden');
-    activeExam = null;
 }
 
 // 2.2 VERIFIKASI ENTER PASSWORD (AMBIL LANGSUNG DARI DB / APP_SETTINGS)
@@ -262,9 +262,12 @@ document.getElementById('tokenForm')?.addEventListener('submit', async (e) => {
     playSound('click');
     const inputToken = document.getElementById('inputExamToken').value.trim();
 
-    if (!activeExam) return;
+    if (!activeExam) {
+        showModernAlert("Data ujian tidak ditemukan. Silakan pilih kembali ujian.", "Gagal Memuat", "error");
+        return;
+    }
 
-    // Ambil ulang settings jika null untuk memastikan kueri selalu segar
+    // Ambil ulang settings jika null
     if (!currentAppSettings && currentClient) {
         const { data: fetchSettings } = await currentClient
             .from('app_settings')
@@ -281,20 +284,26 @@ document.getElementById('tokenForm')?.addEventListener('submit', async (e) => {
         return;
     }
 
-    closeTokenModal();
+    // Sembunyikan modal token TANPA menghapus data activeExam
+    document.getElementById('tokenModal')?.classList.add('hidden');
+    
+    // Jalankan pemuatan frame ujian
     startExamDirectly();
 });
 
-// 3. PENYEDIAAN FRAME EMBEDDED GOOGLE FORM (NON-BLOCKING)
+// 3. PENYEDIAAN FRAME EMBEDDED GOOGLE FORM
 function startExamDirectly() {
-    if (!activeExam) return;
+    if (!activeExam) {
+        console.error("startExamDirectly gagal: activeExam bernilai null");
+        return;
+    }
 
     iframeLoadCount = 0;
 
     const studentNisn = String(loggedInStudent.nisn).trim();
     const subjectIdStr = String(activeExam.id).trim();
 
-    // Jalankan pencatatan awal secara asinkron tanpa menghentikan UI
+    // Catat data awal pengerjaan (is_completed: false) ke Supabase secara background
     currentClient.from('exam_submissions').upsert([{
         nisn: studentNisn,
         student_name: loggedInStudent.nama,
@@ -318,6 +327,7 @@ function startExamDirectly() {
         activeTitle.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Ujian: ${activeExam.subjectName}`;
     }
     
+    // Tampilkan frame ujian & masuk mode layar penuh
     frameContainer?.classList.remove('hidden');
     requestFullscreenMode();
 }
