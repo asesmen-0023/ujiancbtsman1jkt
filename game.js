@@ -250,7 +250,7 @@ function mountGameHub() {
         <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:16px;padding:14px;">
             <div style="text-align:center;margin-bottom:10px;">
                 <div class="mgh-title" style="font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:0.06em;">Mini-Game Standby</div>
-                <div style="font-size:10px;color:#94a3b8;margin-top:2px;">Terbuka layar penuh • portrait &amp; landscape</div>
+                <div style="font-size:10px;color:#94a3b8;margin-top:2px;">SMAN 1 Jakarta</div>
             </div>
             <div style="display:flex;flex-direction:column;gap:8px;">
                 ${MG_ORDER.map((id, i) => {
