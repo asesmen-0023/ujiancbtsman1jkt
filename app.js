@@ -200,6 +200,25 @@ function stopViolationAlarm() {
 // GERBANG VERIFIKASI SUARA (AUDIO GATEKEEPER)
 // ==========================================
 let expectedAudioCode = "";
+const BYPASS_AUDIO_CODE = "999"; // Kode cadangan proktor jika perangkat tidak punya speaker
+
+// Otomatis lewati cek suara jika dibuka di PC/Komputer Lab (bukan iPhone/iPad)
+(function checkDeviceAudioRequirement() {
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+    if (!isIOS) {
+        const skipAudioGate = () => {
+            document.getElementById('audioGateModal')?.classList.add('hidden');
+            document.getElementById('studentLoginModal')?.classList.remove('hidden');
+        };
+        if (document.body) {
+            skipAudioGate();
+        } else {
+            document.addEventListener('DOMContentLoaded', skipAudioGate);
+        }
+    }
+})();
 
 function playAudioGateCode() {
     unlockAllAudio();
@@ -226,6 +245,14 @@ function playAudioGateCode() {
 function verifyAudioGate() {
     const inputEl = document.getElementById('inputAudioGateCode');
     const userCode = inputEl ? inputEl.value.trim() : '';
+
+    // Jalur darurat proktor (jika speaker perangkat rusak / tidak ada audio)
+    if (userCode === BYPASS_AUDIO_CODE) {
+        playSound('click');
+        document.getElementById('audioGateModal')?.classList.add('hidden');
+        document.getElementById('studentLoginModal')?.classList.remove('hidden');
+        return;
+    }
 
     if (!expectedAudioCode) {
         showModernAlert('Silakan tekan tombol "Putar Kode Suara" terlebih dahulu!', 'Belum Memutar Suara', 'error');
