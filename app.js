@@ -14,9 +14,9 @@
                     <div style="background:#1e293b;border:1px solid #334155;padding:32px 24px;border-radius:24px;max-width:380px;width:100%;box-shadow:0 20px 25px -5px rgba(0,0,0,0.4);">
                         <div style="font-size:40px;margin-bottom:12px;">🔒</div>
                         <span style="display:inline-block;background:#ef4444;color:#fff;font-weight:700;font-size:11px;padding:4px 12px;border-radius:99px;margin-bottom:12px;letter-spacing:0.05em;">AKSES DITOLAK</span>
-                        <h1 style="font-size:18px;font-weight:800;margin:0 0 8px;">Gunakan Aplikasi Ujian Resmi</h1>
+                        <h1 style="font-size:18px;font-weight:800;margin:0 0 8px;">Gunakan Aplikasi Ujian</h1>
                         <p style="font-size:13px;color:#cbd5e1;line-height:1.6;margin:0;">
-                            Portal Asesmen <b>SMAN 1 Jakarta</b> hanya dapat dibuka melalui aplikasi <b>Safe Exam Browser (SEB)</b> menggunakan file konfigurasi dari akademik SMAN 1 Jakarta.
+                            Portal Asesmen <b>SMAN 1 Jakarta</b> hanya dapat dibuka melalui aplikasi <b>ujian SMAN 1 Jakarta</b> yang disediakan oleh tim akademik SMAN 1 Jakarta.
                         </p>
                     </div>
                 </div>
