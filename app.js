@@ -1,3 +1,37 @@
+// ==========================================
+// PROTEKSI WAJIB SAFE EXAM BROWSER (SEB ONLY)
+// ==========================================
+(function enforceSafeExamBrowser() {
+    const ua = navigator.userAgent || "";
+    const isSEBUserAgent = /SEB/i.test(ua);
+    const hasSEBObject = typeof window.SafeExamBrowser !== "undefined";
+
+    // Jika dibuka di Safari/Chrome biasa (bukan SEB), blokir seluruh halaman
+    if (!isSEBUserAgent && !hasSEBObject) {
+        const blockRender = () => {
+            document.body.innerHTML = `
+                <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0f172a;color:#fff;font-family:system-ui,sans-serif;padding:20px;text-align:center;">
+                    <div style="background:#1e293b;border:1px solid #334155;padding:32px 24px;border-radius:24px;max-width:380px;width:100%;box-shadow:0 20px 25px -5px rgba(0,0,0,0.4);">
+                        <div style="font-size:40px;margin-bottom:12px;">🔒</div>
+                        <span style="display:inline-block;background:#ef4444;color:#fff;font-weight:700;font-size:11px;padding:4px 12px;border-radius:99px;margin-bottom:12px;letter-spacing:0.05em;">AKSES DITOLAK</span>
+                        <h1 style="font-size:18px;font-weight:800;margin:0 0 8px;">Gunakan Aplikasi Ujian Resmi</h1>
+                        <p style="font-size:13px;color:#cbd5e1;line-height:1.6;margin:0;">
+                            Portal Asesmen <b>SMAN 1 Jakarta</b> hanya dapat dibuka melalui aplikasi <b>Safe Exam Browser (SEB)</b> menggunakan file konfigurasi dari akademik SMAN 1 Jakarta.
+                        </p>
+                    </div>
+                </div>
+            `;
+        };
+
+        if (document.body) {
+            blockRender();
+        } else {
+            document.addEventListener("DOMContentLoaded", blockRender);
+        }
+        throw new Error("Akses diblokir: Bukan Safe Exam Browser.");
+    }
+})();
+
 // Konfigurasi 3 Server Supabase SMAN 1 Jakarta
 const SUPABASE_SERVERS = {
     "X": {
@@ -79,49 +113,6 @@ function unlockAllAudio() {
 }
 document.addEventListener('touchstart', unlockAllAudio, { once: true });
 document.addEventListener('click', unlockAllAudio, { once: true });
-
-// ==========================================
-// PROTEKSI WAJIB SAFE EXAM BROWSER (SEB ONLY)
-// ==========================================
-(function enforceSafeExamBrowser() {
-    const ua = navigator.userAgent || "";
-    const isSEBUserAgent = /SEB/i.test(ua);
-    const hasSEBObject = typeof window.SafeExamBrowser !== "undefined";
-
-    // Jika dibuka di Safari/Chrome biasa (bukan SEB), blokir seluruh halaman
-    if (!isSEBUserAgent && !hasSEBObject) {
-        const blockRender = () => {
-            document.body.innerHTML = `
-                <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0f172a;color:#fff;font-family:system-ui,sans-serif;padding:20px;text-align:center;">
-                    <div style="background:#1e293b;border:1px solid #334155;padding:32px 24px;border-radius:24px;max-width:380px;width:100%;box-shadow:0 20px 25px -5px rgba(0,0,0,0.4);">
-                        <div style="font-size:40px;margin-bottom:12px;">🔒</div>
-                        <span style="display:inline-block;background:#ef4444;color:#fff;font-weight:700;font-size:11px;padding:4px 12px;border-radius:99px;margin-bottom:12px;letter-spacing:0.05em;">AKSES DITOLAK</span>
-                        <h1 style="font-size:18px;font-weight:800;margin:0 0 8px;">Menggunakan aplikasi ujian dari SMAN 1 Jakarta</h1>
-                        <p style="font-size:13px;color:#cbd5e1;line-height:1.6;margin:0;">
-                            Portal Asesmen <b>SMAN 1 Jakarta</b> hanya dapat dibuka melalui aplikasi <b>khusus dari akademik SMAN 1 Jakarta </b>.
-                        </p>
-                    </div>
-                </div>
-            `;
-        };
-
-        if (document.body) {
-            blockRender();
-        } else {
-            document.addEventListener("DOMContentLoaded", blockRender);
-        }
-        throw new Error("Akses diblokir: Bukan Safe Exam Browser.");
-    }
-})();
-
-// Konfigurasi 3 Server Supabase SMAN 1 Jakarta
-const SUPABASE_SERVERS = {
-    "X": {
-        name: "Kelas X",
-        url: "https://ulroqkrnwzzrgkasrqit.supabase.co",
-        anonKey: "sb_publishable_DJm-HRJpia9X3CzOlBq61Q_Dqct-DPi"
-    },
-    // ... sisa kode app.js Anda tetap di bawahnya ...
 
 // Synthesizer diperkeras & diperpanjang untuk efek UI dan fallback jika MP3 gagal dimuat
 function playSynthFallback(type) {
