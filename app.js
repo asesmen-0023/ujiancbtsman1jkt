@@ -296,8 +296,12 @@ function requestFullscreenMode() {
     }
 }
 
+function isGameTransition() {
+    return Date.now() < (window.cbtGameGuardUntil || 0);
+}
 function triggerViolationNotice(reason) {
     if (!isExamActive) return;
+    if (isGameTransition()) return;
 
     playSound('alarm');
     violations++;
