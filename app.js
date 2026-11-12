@@ -26,43 +26,204 @@ let currentAppSettings = null;
 let iframeLoadCount = 0;
 let isInteractingWithForm = false;
 
-// Web Audio Synthesizer
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+// ==========================================
+// 0. SISTEM AUDIO MP3, PENGUAT 3X & SYNTHESIZER
+// ==========================================
+const CBT_AUDIO = {
+    alarm: new Audio('./alarm.mp3'),
+    masuk: new Audio('./masuk_ujian_cbt.mp3'),
+    berhasil: new Audio('./berhasil_kirim_gf.mp3'),
+    isUnlocked: false
+};
 
-function playSound(type) {
+CBT_AUDIO.alarm.loop = true;
+CBT_AUDIO.alarm.preload = 'auto';
+CBT_AUDIO.masuk.preload = 'auto';
+CBT_AUDIO.berhasil.preload = 'auto';
+
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+let isBoosterConnected = false;
+
+// Penguat sinyal audio digital 300% untuk alarm pelanggaran
+function initAudioBooster() {
+    if (isBoosterConnected) return;
+    try {
+        const source = audioCtx.createMediaElementSource(CBT_AUDIO.alarm);
+        const gainNode = audioCtx.createGain();
+        gainNode.gain.value = 3.0;
+        source.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        isBoosterConnected = true;
+    } catch (e) {
+        // Abaikan jika WebKit membatasi MediaElementSource
+    }
+}
+
+// Buka kunci pembatasan autoplay audio iOS SEB pada interaksi pertama
+function unlockAllAudio() {
     if (audioCtx.state === 'suspended') {
         audioCtx.resume();
     }
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
+    initAudioBooster();
 
-    if (type === 'alarm') {
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(880, audioCtx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.3);
-        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
-        osc.start();
-        osc.stop(audioCtx.currentTime + 0.3);
-    } else if (type === 'click') {
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(600, audioCtx.currentTime);
-        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.08);
-        osc.start();
-        osc.stop(audioCtx.currentTime + 0.08);
-    } else if (type === 'success') {
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(523.25, audioCtx.currentTime);
-        osc.frequency.setValueAtTime(659.25, audioCtx.currentTime + 0.15);
-        osc.frequency.setValueAtTime(783.99, audioCtx.currentTime + 0.3);
-        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.6);
-        osc.start();
-        osc.stop(audioCtx.currentTime + 0.6);
+    if (CBT_AUDIO.isUnlocked) return;
+    [CBT_AUDIO.alarm, CBT_AUDIO.masuk, CBT_AUDIO.berhasil].forEach(audio => {
+        audio.muted = true;
+        audio.play().then(() => {
+            audio.pause();
+            audio.currentTime = 0;
+            audio.muted = false;
+        }).catch(() => {});
+    });
+    CBT_AUDIO.isUnlocked = true;
+}
+document.addEventListener('touchstart', unlockAllAudio, { once: true });
+document.addEventListener('click', unlockAllAudio, { once: true });
+
+// Synthesizer diperkeras & diperpanjang untuk efek UI dan fallback jika MP3 gagal dimuat
+function playSynthFallback(type) {
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
     }
+    const now = audioCtx.currentTime;
+
+    if (type === 'alarm' || type === 'alert_error') {
+        const duration = type === 'alarm' ? 2.5 : 1.4;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sawtooth';
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        gain.gain.setValueAtTime(0.85, now);
+        for (let t = 0; t < duration; t += 0.4) {
+            osc.frequency.setValueAtTime(960, now + t);
+            osc.frequency.setValueAtTime(640, now + t + 0.2);
+        }
+        gain.gain.exponentialRampToValueAtTime(0.01, now + duration);
+
+        osc.start(now);
+        osc.stop(now + duration);
+    } else if (type === 'click') {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(650, now);
+        gain.gain.setValueAtTime(0.25, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + 0.12);
+    } else if (type === 'success') {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(523.25, now);
+        osc.frequency.setValueAtTime(659.25, now + 0.2);
+        osc.frequency.setValueAtTime(783.99, now + 0.4);
+        osc.frequency.setValueAtTime(1046.50, now + 0.6);
+        gain.gain.setValueAtTime(0.6, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 1.2);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + 1.2);
+    }
+}
+
+function playSound(type) {
+    if (type === 'alarm') {
+        CBT_AUDIO.alarm.volume = 1.0;
+        if (CBT_AUDIO.alarm.paused) {
+            CBT_AUDIO.alarm.currentTime = 0;
+            CBT_AUDIO.alarm.play().catch(() => playSynthFallback('alarm'));
+        }
+    } else if (type === 'masuk') {
+        CBT_AUDIO.masuk.volume = 1.0;
+        CBT_AUDIO.masuk.currentTime = 0;
+        CBT_AUDIO.masuk.play().catch(() => playSynthFallback('success'));
+    } else if (type === 'success') {
+        stopViolationAlarm();
+        CBT_AUDIO.berhasil.volume = 1.0;
+        CBT_AUDIO.berhasil.currentTime = 0;
+        CBT_AUDIO.berhasil.play().catch(() => playSynthFallback('success'));
+    } else if (type === 'alert_error') {
+        playSynthFallback('alert_error');
+    } else {
+        playSynthFallback('click');
+    }
+}
+
+function stopViolationAlarm() {
+    if (CBT_AUDIO.alarm && !CBT_AUDIO.alarm.paused) {
+        CBT_AUDIO.alarm.pause();
+        CBT_AUDIO.alarm.currentTime = 0;
+    }
+}
+
+// ==========================================
+// GERBANG VERIFIKASI SUARA (AUDIO GATEKEEPER)
+// ==========================================
+let expectedAudioCode = "";
+
+function playAudioGateCode() {
+    unlockAllAudio();
+
+    expectedAudioCode = String(Math.floor(100 + Math.random() * 900));
+    const angkaTeks = {
+        '0': 'nol', '1': 'satu', '2': 'dua', '3': 'tiga', '4': 'empat',
+        '5': 'lima', '6': 'enam', '7': 'tujuh', '8': 'delapan', '9': 'sembilan'
+    };
+    const ejaanSuara = expectedAudioCode.split('').map(d => angkaTeks[d]).join(' ... ');
+
+    if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(`Kode suara Anda adalah ... ${ejaanSuara}`);
+        utterance.lang = 'id-ID';
+        utterance.rate = 0.85;
+        utterance.volume = 1.0;
+        window.speechSynthesis.speak(utterance);
+    } else {
+        playSound('masuk');
+    }
+}
+
+function verifyAudioGate() {
+    const inputEl = document.getElementById('inputAudioGateCode');
+    const userCode = inputEl ? inputEl.value.trim() : '';
+
+    if (!expectedAudioCode) {
+        showModernAlert('Silakan tekan tombol "Putar Kode Suara" terlebih dahulu!', 'Belum Memutar Suara', 'error');
+        return;
+    }
+
+    if (userCode === expectedAudioCode) {
+        playSound('click');
+        document.getElementById('audioGateModal')?.classList.add('hidden');
+        document.getElementById('studentLoginModal')?.classList.remove('hidden');
+    } else {
+        if (inputEl) inputEl.value = '';
+        showModernAlert(
+            'Kode suara tidak cocok atau volume perangkat Anda masih mati. Naikkan volume iPhone/iPad lalu putar ulang kode suara!',
+            'Verifikasi Suara Gagal',
+            'error'
+        );
+    }
+}
+
+// ==========================================
+// PELANGGARAN LOKAL (TANPA KIRIM KE SUPABASE)
+// ==========================================
+function getLocalViolationKey() {
+    const nisn = loggedInStudent ? String(loggedInStudent.nisn).trim() : 'guest';
+    const examId = activeExam ? String(activeExam.id).trim() : 'general';
+    return `CBT_LOCAL_VIOLATIONS_${nisn}_${examId}`;
+}
+
+function loadLocalViolations() {
+    const saved = localStorage.getItem(getLocalViolationKey());
+    violations = saved ? parseInt(saved, 10) : 0;
 }
 
 function requestFullscreenMode() {
@@ -79,6 +240,8 @@ function triggerViolationNotice(reason) {
 
     playSound('alarm');
     violations++;
+    localStorage.setItem(getLocalViolationKey(), String(violations));
+
     const vReason = document.getElementById('violationReason');
     const vCount = document.getElementById('violationCount');
     if (vReason) vReason.innerText = reason;
@@ -87,13 +250,14 @@ function triggerViolationNotice(reason) {
 }
 
 function resumeExam() {
+    stopViolationAlarm();
     playSound('click');
     document.getElementById('violationModal')?.classList.add('hidden');
     requestFullscreenMode();
 }
 
 function showModernAlert(message, title = 'Akses Ditolak', type = 'error') {
-    playSound(type === 'success' ? 'success' : 'alarm');
+    playSound(type === 'success' ? 'success' : 'alert_error');
     const modal = document.getElementById('modernAlertModal');
     const alertTitle = document.getElementById('alertTitle');
     const alertMessage = document.getElementById('alertMessage');
@@ -108,8 +272,9 @@ function closeModernAlert() {
     document.getElementById('modernAlertModal')?.classList.add('hidden');
 }
 
-// 1. LOGIN SISWA
-// NAVIGATION MULTI-STEP LOGIN
+// ==========================================
+// 1. LOGIN SISWA (MULTI-STEP)
+// ==========================================
 function goToStep2(angkatan) {
     playSound('click');
     const label = SUPABASE_SERVERS[angkatan]?.name || `Kelas ${angkatan}`;
@@ -129,16 +294,15 @@ function goToStep1() {
     document.getElementById('stepSelectAngkatan')?.classList.remove('hidden');
 }
 
-// EVENT LISTENER TAHAP 1: PILIH KELAS
 document.getElementById('step1Form')?.addEventListener('submit', (e) => {
     e.preventDefault();
     const angkatan = document.getElementById('serverAngkatan').value;
     goToStep2(angkatan);
 });
 
-// EVENT LISTENER TAHAP 2: AUTENTIKASI SISWA & LOGIN SUPABASE
 document.getElementById('studentLoginForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
+    unlockAllAudio();
     playSound('click');
     
     const angkatan = document.getElementById('serverAngkatan').value;
@@ -173,7 +337,6 @@ document.getElementById('studentLoginForm')?.addEventListener('submit', async (e
         return;
     }
 
-    // Fetch app_settings untuk enter_password
     const { data: settingsData } = await currentClient
         .from('app_settings')
         .select('*')
@@ -193,7 +356,9 @@ document.getElementById('studentLoginForm')?.addEventListener('submit', async (e
     loadAvailableExams(data.student_class);
 });
 
+// ==========================================
 // 2. DASHBOARD SOAL UJIAN
+// ==========================================
 async function loadAvailableExams(studentClass) {
     const container = document.getElementById('examListContainer');
     if (!container) return;
@@ -266,7 +431,6 @@ async function loadAvailableExams(studentClass) {
     }).join('');
 }
 
-// 2.1 POPUP INPUT ENTER PASSWORD
 function promptExamToken(id, name, formUrl) {
     playSound('click');
     activeExam = {
@@ -279,16 +443,14 @@ function promptExamToken(id, name, formUrl) {
     document.getElementById('tokenModal')?.classList.remove('hidden');
 }
 
-// PERBAIKAN: JANGAN MENGHAPUS activeExam SAAT MENUTUP MODAL DARI TOMBOL BATAL/SELESAI
 function closeTokenModal() {
     playSound('click');
     document.getElementById('tokenModal')?.classList.add('hidden');
 }
 
-// 2.2 VERIFIKASI ENTER PASSWORD (AMBIL LANGSUNG DARI DB / APP_SETTINGS)
 document.getElementById('tokenForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
-    playSound('click');
+    unlockAllAudio();
     const inputToken = document.getElementById('inputExamToken').value.trim();
 
     if (!activeExam) {
@@ -296,7 +458,6 @@ document.getElementById('tokenForm')?.addEventListener('submit', async (e) => {
         return;
     }
 
-    // Ambil ulang settings jika null
     if (!currentAppSettings && currentClient) {
         const { data: fetchSettings } = await currentClient
             .from('app_settings')
@@ -313,26 +474,27 @@ document.getElementById('tokenForm')?.addEventListener('submit', async (e) => {
         return;
     }
 
-    // Sembunyikan modal token TANPA menghapus data activeExam
     document.getElementById('tokenModal')?.classList.add('hidden');
-    
-    // Jalankan pemuatan frame ujian
     startExamDirectly();
 });
 
+// ==========================================
 // 3. PENYEDIAAN FRAME EMBEDDED GOOGLE FORM
+// ==========================================
 function startExamDirectly() {
     if (!activeExam) {
         console.error("startExamDirectly gagal: activeExam bernilai null");
         return;
     }
 
+    loadLocalViolations();
+    playSound('masuk');
+
     iframeLoadCount = 0;
 
     const studentNisn = String(loggedInStudent.nisn).trim();
     const subjectIdStr = String(activeExam.id).trim();
 
-    // Catat data awal pengerjaan (is_completed: false) ke Supabase secara background
     currentClient.from('exam_submissions').upsert([{
         nisn: studentNisn,
         student_name: loggedInStudent.nama,
@@ -356,12 +518,11 @@ function startExamDirectly() {
         activeTitle.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Ujian: ${activeExam.subjectName}`;
     }
     
-    // Tampilkan frame ujian & masuk mode layar penuh
     frameContainer?.classList.remove('hidden');
     requestFullscreenMode();
 }
 
-// FUNGSI PENYIMPANAN SUPABASE DENGAN CATCH ERROR
+// Simpan status selesai tanpa mengirim data pelanggaran ke server Supabase
 async function markExamCompleted() {
     if (!activeExam || !loggedInStudent || !currentClient) return false;
 
@@ -375,18 +536,18 @@ async function markExamCompleted() {
             student_name: loggedInStudent.nama,
             student_class: loggedInStudent.student_class,
             subject_id: subjectId,
-            is_completed: true,
-            violation_count: violations
+            is_completed: true
         }], { onConflict: 'nisn,subject_id' });
 
     if (error) {
         showModernAlert('Gagal menyimpan status ke Supabase: ' + error.message, 'Database Error', 'error');
         return false;
     }
+
+    localStorage.removeItem(getLocalViolationKey());
     return true;
 }
 
-// BUKA TAMPILAN STANDBY MINI GAME FULLSCREEN
 function finishExamUI() {
     playSound('success');
 
@@ -405,7 +566,6 @@ function finishExamUI() {
     }
 }
 
-// 4. DETEKSI IFRAME SUBMIT GOOGLE FORM
 async function handleIframeSubmit() {
     iframeLoadCount++;
 
@@ -417,7 +577,6 @@ async function handleIframeSubmit() {
     }
 }
 
-// BACKUP MANUAL TOMBOL "SAYA SUDAH KIRIM"
 async function confirmFinished() {
     if (!activeExam) return;
     if (!confirm('Pastikan Google Form sudah benar-benar terkirim. Lanjutkan keluar?')) return;
@@ -429,12 +588,15 @@ async function confirmFinished() {
 }
 
 function logoutExam() {
+    stopViolationAlarm();
     playSound('click');
     isExamActive = false;
     location.reload();
 }
 
-// LOGIKA KEAMANAN DISTRAKSI
+// ==========================================
+// 4. LOGIKA KEAMANAN DISTRAKSI
+// ==========================================
 document.addEventListener('visibilitychange', () => {
     if (document.hidden && isExamActive) {
         triggerViolationNotice('Dilarang berpindah tab atau meminimalkan browser!');
