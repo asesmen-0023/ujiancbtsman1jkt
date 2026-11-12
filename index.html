@@ -104,65 +104,104 @@
         <p class="text-[11px] text-slate-400 font-medium mt-4">CBT SMAN 1 Jakarta • Standby Mode</p>
     </div>
 
-    <!-- TAHAP LOGIN SISWA (MULTI-STEP) -->
-<div id="studentLoginModal" class="min-h-screen flex flex-col items-center justify-center p-4">
-    <div class="w-full max-w-sm text-center mb-6">
-        <div class="w-20 h-20 mx-auto mb-3 flex items-center justify-center">
-            <img src="https://upload.wikimedia.org/wikipedia/commons/e/e4/Logo_SMA_Negeri_1_Jakarta.png" 
-                 onerror="this.onerror=null; this.src='https://cdn-icons-png.flaticon.com/512/2991/2991108.png'" 
-                 alt="Logo SMAN 1 Jakarta" class="w-full h-full object-contain">
+    <!-- TAHAP 0: GERBANG VERIFIKASI SUARA WAJIB (MENAHAN SISWA JIKA VOLUME MATI) -->
+    <div id="audioGateModal" class="min-h-screen flex flex-col items-center justify-center p-4">
+        <div class="w-full max-w-sm text-center mb-6">
+            <div class="w-20 h-20 mx-auto mb-3 flex items-center justify-center">
+                <img src="https://upload.wikimedia.org/wikipedia/commons/e/e4/Logo_SMA_Negeri_1_Jakarta.png" 
+                     onerror="this.onerror=null; this.src='https://cdn-icons-png.flaticon.com/512/2991/2991108.png'" 
+                     alt="Logo SMAN 1 Jakarta" class="w-full h-full object-contain">
+            </div>
+            <p class="text-xs font-bold text-blue-600 tracking-wider uppercase mb-1">PORTAL ASESMEN</p>
+            <h1 class="text-xl font-black text-slate-900">SMA NEGERI 1 JAKARTA</h1>
+            <p class="text-xs text-slate-500 mt-1">Verifikasi Audio Perangkat Sebelum Ujian</p>
         </div>
-        <p class="text-xs font-bold text-blue-600 tracking-wider uppercase mb-1">PORTAL ASESMEN</p>
-        <h1 class="text-xl font-black text-slate-900">SMA NEGERI 1 JAKARTA</h1>
-        <p id="loginStepSubtitle" class="text-xs text-slate-500 mt-1">Langkah 1 dari 2: Pilih Kelas</p>
-    </div>
 
-    <!-- TAHAP 1: FORM PILIH ANGKATAN -->
-    <div id="stepSelectAngkatan" class="bg-white rounded-3xl shadow-xl border border-slate-100 p-6 w-full max-w-sm">
-        <form id="step1Form" class="space-y-4">
-            <div>
-                <label class="block text-xs font-bold text-slate-700 mb-1.5">Pilih Kelas</label>
-                <select id="serverAngkatan" class="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 transition">
-                    <option value="X">Kelas X</option>
-                    <option value="XI">Kelas XI</option>
-                    <option value="XII">Kelas XII</option>
-                </select>
+        <div class="bg-white rounded-3xl shadow-xl border border-slate-100 p-6 w-full max-w-sm text-center">
+            <div class="w-14 h-14 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto mb-3 text-2xl">
+                🔊
             </div>
-            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold p-3 rounded-xl text-xs transition shadow-lg shadow-blue-500/20 active:scale-95 flex items-center justify-center gap-1">
-                Lanjut &rarr;
+            <h2 class="text-base font-extrabold text-slate-900 mb-1">Cek Suara Perangkat</h2>
+            <p class="text-xs text-slate-500 leading-relaxed mb-5">
+                Naikkan tombol volume di samping iPhone/iPad minimal <b>70%</b>, lalu putar kode suara di bawah ini.
+            </p>
+
+            <button type="button" onclick="playAudioGateCode()" class="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold p-3 rounded-xl text-xs transition shadow-lg shadow-amber-500/20 active:scale-95 mb-4 flex items-center justify-center gap-2">
+                <span>▶️ Putar Kode Suara (3 Digit)</span>
             </button>
-        </form>
-    </div>
 
-    <!-- TAHAP 2: FORM NISN & PASSWORD (DISEMBUNYIKAN AWALNYA) -->
-    <div id="stepCredentials" class="hidden bg-white rounded-3xl shadow-xl border border-slate-100 p-6 w-full max-w-sm">
-        <div class="flex justify-between items-center bg-blue-50 border border-blue-100 p-3 rounded-xl mb-4">
-            <div>
-                <span class="text-[10px] font-bold text-blue-500 uppercase tracking-wider block">Target Kelas</span>
-                <span id="selectedServerLabel" class="text-xs font-extrabold text-blue-700">XI</span>
+            <div class="mb-4">
+                <input type="tel" id="inputAudioGateCode" maxlength="3" placeholder="Ketik 3 angka yang terdengar" 
+                    class="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-center tracking-[0.4em] font-mono font-extrabold text-sm text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 transition">
             </div>
-            <button type="button" onclick="goToStep1()" class="text-xs font-bold text-slate-500 hover:text-slate-800 bg-white border border-slate-200 px-2.5 py-1 rounded-lg transition active:scale-95">
-                &larr; Ganti
+
+            <button type="button" onclick="verifyAudioGate()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold p-3 rounded-xl text-xs transition shadow-lg shadow-blue-500/20 active:scale-95">
+                Verifikasi & Lanjut Login &rarr;
             </button>
         </div>
 
-        <form id="studentLoginForm" class="space-y-4">
-            <div>
-                <label class="block text-xs font-bold text-slate-700 mb-1.5">NISN Siswa</label>
-                <input type="text" id="studentNisn" class="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs font-mono text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 transition" placeholder="Contoh: 0012345677" required>
-            </div>
-            <div>
-                <label class="block text-xs font-bold text-slate-700 mb-1.5">Password</label>
-                <input type="password" id="studentPass" class="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 transition" placeholder="Masukkan Password" required>
-            </div>
-            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold p-3 rounded-xl text-xs transition shadow-lg shadow-blue-500/20 active:scale-95 mt-2">
-                MASUK PORTAL
-            </button>
-        </form>
+        <p class="text-[11px] text-slate-400 mt-6 font-medium">1.0 SMAN 1 JAKARTA</p>
     </div>
 
-    <p class="text-[11px] text-slate-400 mt-6 font-medium">1.0 SMAN 1 JAKARTA</p>
-</div>
+    <!-- TAHAP LOGIN SISWA (MULTI-STEP — MUNCUL SETELAH VERIFIKASI SUARA) -->
+    <div id="studentLoginModal" class="hidden min-h-screen flex flex-col items-center justify-center p-4">
+        <div class="w-full max-w-sm text-center mb-6">
+            <div class="w-20 h-20 mx-auto mb-3 flex items-center justify-center">
+                <img src="https://upload.wikimedia.org/wikipedia/commons/e/e4/Logo_SMA_Negeri_1_Jakarta.png" 
+                     onerror="this.onerror=null; this.src='https://cdn-icons-png.flaticon.com/512/2991/2991108.png'" 
+                     alt="Logo SMAN 1 Jakarta" class="w-full h-full object-contain">
+            </div>
+            <p class="text-xs font-bold text-blue-600 tracking-wider uppercase mb-1">PORTAL ASESMEN</p>
+            <h1 class="text-xl font-black text-slate-900">SMA NEGERI 1 JAKARTA</h1>
+            <p id="loginStepSubtitle" class="text-xs text-slate-500 mt-1">Langkah 1 dari 2: Pilih Kelas</p>
+        </div>
+
+        <!-- TAHAP 1: FORM PILIH ANGKATAN -->
+        <div id="stepSelectAngkatan" class="bg-white rounded-3xl shadow-xl border border-slate-100 p-6 w-full max-w-sm">
+            <form id="step1Form" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1.5">Pilih Kelas</label>
+                    <select id="serverAngkatan" class="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 transition">
+                        <option value="X">Kelas X</option>
+                        <option value="XI">Kelas XI</option>
+                        <option value="XII">Kelas XII</option>
+                    </select>
+                </div>
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold p-3 rounded-xl text-xs transition shadow-lg shadow-blue-500/20 active:scale-95 flex items-center justify-center gap-1">
+                    Lanjut &rarr;
+                </button>
+            </form>
+        </div>
+
+        <!-- TAHAP 2: FORM NISN & PASSWORD (DISEMBUNYIKAN AWALNYA) -->
+        <div id="stepCredentials" class="hidden bg-white rounded-3xl shadow-xl border border-slate-100 p-6 w-full max-w-sm">
+            <div class="flex justify-between items-center bg-blue-50 border border-blue-100 p-3 rounded-xl mb-4">
+                <div>
+                    <span class="text-[10px] font-bold text-blue-500 uppercase tracking-wider block">Target Kelas</span>
+                    <span id="selectedServerLabel" class="text-xs font-extrabold text-blue-700">XI</span>
+                </div>
+                <button type="button" onclick="goToStep1()" class="text-xs font-bold text-slate-500 hover:text-slate-800 bg-white border border-slate-200 px-2.5 py-1 rounded-lg transition active:scale-95">
+                    &larr; Ganti
+                </button>
+            </div>
+
+            <form id="studentLoginForm" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1.5">NISN Siswa</label>
+                    <input type="text" id="studentNisn" class="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs font-mono text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 transition" placeholder="Contoh: 0012345677" required>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1.5">Password</label>
+                    <input type="password" id="studentPass" class="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 transition" placeholder="Masukkan Password" required>
+                </div>
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold p-3 rounded-xl text-xs transition shadow-lg shadow-blue-500/20 active:scale-95 mt-2">
+                    MASUK PORTAL
+                </button>
+            </form>
+        </div>
+
+        <p class="text-[11px] text-slate-400 mt-6 font-medium">1.0 SMAN 1 JAKARTA</p>
+    </div>
 
     <!-- TAHAP 2: DASHBOARD PILIH UJIAN HARI INI -->
     <div id="examApp" class="hidden min-h-screen flex flex-col">
